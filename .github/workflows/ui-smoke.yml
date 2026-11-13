@@ -208,6 +208,12 @@ jobs:
           port=$(grep -o 'smoke: forward [0-9-]*' shots/app-hosttools.log | awk '{print $3}')
           echo "forwarded to local port: $port"
           lsof -nP -iTCP:"$port" -sTCP:LISTEN || true
+          # Diagnostics: the service itself, and a tunnel made by hand on the same master.
+          curl -sS -m 3 -o /dev/null -w "direct 6006: %{http_code}\n" http://127.0.0.1:6006/ || true
+          sudo sshd -T 2>/dev/null | grep -iE "allowtcpforwarding|permitopen|disableforwarding" || true
+          ssh -o ControlPath=$HOME/.ssh/lm/%C -O check lab1 || true
+          ssh -o ControlPath=$HOME/.ssh/lm/%C -O forward -L 127.0.0.1:6011:127.0.0.1:6006 lab1 && curl -sS -m 3 -o /dev/null -w "manual tunnel: %{http_code}\n" http://127.0.0.1:6011/ || true
+          ssh -o BatchMode=yes -o ControlPath=none -f -N -L 127.0.0.1:6012:127.0.0.1:6006 lab1 && sleep 1 && curl -sS -m 3 -o /dev/null -w "plain ssh -L: %{http_code}\n" http://127.0.0.1:6012/ || true
           curl -sS -m 5 "http://127.0.0.1:$port/" 2>&1 | head -n 12 | tee shots/forward.txt
           kill $(cat app.pid) 2>/dev/null || true
           kill $(cat web.pid) 2>/dev/null || true
