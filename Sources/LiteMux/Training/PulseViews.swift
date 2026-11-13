@@ -292,8 +292,7 @@ private struct FocusChart: View {
                         .interpolationMethod(.monotone)
                 }
                 ForEach(Array(pts.enumerated()), id: \.offset) { _, p in
-                    AreaMark(x: .value("epoch", p.x), yStart: .value("floor", floor), yEnd: .value(series.name, p.y),
-                             series: .value("run", "area"))
+                    AreaMark(x: .value("epoch", p.x), yStart: .value("floor", floor), yEnd: .value(series.name, p.y))
                         .foregroundStyle(LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.0)],
                                                         startPoint: .top, endPoint: .bottom))
                         .interpolationMethod(.monotone)

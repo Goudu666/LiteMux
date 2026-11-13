@@ -25,12 +25,13 @@ final class PaneTraining {
     func attach(to view: LocalProcessTerminalView) {
         self.view = view
         let pending = self.pending
-        view.setProcessOutputHandler { [weak self] in
+        let owner = WeakTraining(self)
+        view.setProcessOutputHandler {
             // Parse thread: only schedule; the read happens on main, coalesced.
             guard pending.setIfClear() else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + PaneTraining.interval) {
                 pending.clear()
-                MainActor.assumeIsolated { self?.scan() }
+                MainActor.assumeIsolated { owner.value?.scan() }
             }
         }
     }
@@ -52,6 +53,12 @@ final class PaneTraining {
 
     /// Whether the status bar should show anything for this pane.
     var hasCurves: Bool { run?.primary != nil }
+}
+
+/// Lets the parse-thread callback reach the pane without retaining it.
+private final class WeakTraining: @unchecked Sendable {
+    weak var value: PaneTraining?
+    init(_ value: PaneTraining) { self.value = value }
 }
 
 /// A test-and-set flag shared with SwiftTerm's parse thread.

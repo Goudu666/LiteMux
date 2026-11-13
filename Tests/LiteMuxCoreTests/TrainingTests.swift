@@ -253,7 +253,9 @@ final class LabelMapTests: XCTestCase {
         XCTAssertEqual(map.labels.map(\.value), [0x000000, 0x008000, 0x800000])
 
         // A gradient (a photo) has far too many values.
-        let photo = (0..<200).map { (UInt8($0), UInt8(255 - $0), UInt8($0 / 2)) }
+        let photo: [(UInt8, UInt8, UInt8)] = (0..<200).map { (i: Int) -> (UInt8, UInt8, UInt8) in
+            (UInt8(i), UInt8(255 - i), UInt8(i / 2))
+        }
         XCTAssertNil(LabelMap.analyze(rgba: rgba(photo), pixelCount: photo.count))
         // So does a single flat colour, in the other direction.
         XCTAssertNil(LabelMap.analyze(rgba: rgba([(9, 9, 9), (9, 9, 9)]), pixelCount: 2))
