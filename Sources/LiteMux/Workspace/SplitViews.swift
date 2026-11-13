@@ -145,6 +145,12 @@ struct PaneView: View {
                 Theme.canvasColor.opacity(0.32).allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .top) {
+            // The focused pane carries the theme's accent along its top edge.
+            if multiple && isFocused {
+                Theme.accentColor.opacity(0.75).frame(height: 1.5).allowsHitTesting(false)
+            }
+        }
         .animation(.easeOut(duration: 0.18), value: session?.phase)
     }
 }

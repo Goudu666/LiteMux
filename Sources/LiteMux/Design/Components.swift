@@ -109,7 +109,7 @@ struct SegmentedSwitch<T: Hashable>: View {
                         .background { if selection == value { RaisedPlate(cornerRadius: 5) } }
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(selection == value ? .primary : .secondary)
+                .foregroundStyle(selection == value ? AnyShapeStyle(Theme.accentColor) : AnyShapeStyle(.secondary))
             }
         }
         .padding(2)

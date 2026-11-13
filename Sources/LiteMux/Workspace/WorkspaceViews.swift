@@ -136,6 +136,9 @@ struct TabChip: View {
         .background {
             if selected {
                 RaisedPlate(cornerRadius: 6)
+                    .overlay(alignment: .bottom) {
+                        Capsule().fill(Theme.accentColor).frame(width: 18, height: 2).offset(y: -1.5)
+                    }
             } else if hovering {
                 RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.045))
             }
