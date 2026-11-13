@@ -161,8 +161,8 @@ jobs:
           done
 
       # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
-      # them with git: `git fetch origin refs/ci/screenshots`.
-      - name: Publish screenshots to refs/ci/screenshots
+      # them with git: `git fetch origin refs/ci/shots/<branch>`.
+      - name: Publish screenshots to refs/ci/shots/<branch>
         if: always()
         env:
           TOKEN: ${{ github.token }}
@@ -171,7 +171,7 @@ jobs:
           git init -q
           git add -A
           git -c user.name="${{ github.actor }}" -c user.email="${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com" commit -qm "ui smoke screenshots"
-          git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}" HEAD:refs/ci/screenshots
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}" HEAD:refs/ci/shots/${{ github.ref_name }}
 
       - uses: actions/upload-artifact@v4
         if: always()
