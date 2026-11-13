@@ -60,6 +60,10 @@ sh -c 'cd <dir> 2>/dev/null; if command -v tmux >/dev/null 2>&1; then exec tmux 
 
 **编辑保存。** 用 `WRITE|CREAT|TRUNC` 打开原文件，写回同一个 inode，所以文件权限不变。
 
+**Training Pulse。** 每个窗格在有输出时（最多每 0.35 秒一次）读取一次终端当前画面，交给 `LiteMuxCore/Training` 解析。读的是渲染后的画面而不是字节流，所以 tmux 重绘、重新挂载、`\r` 刷新的进度条都不会产生重复点：每条逻辑行只解析一次，点按 epoch/step 定位，重绘只会覆盖原来的点。解析器认识普通 `key=value` 打印、Keras、tqdm/Lightning、Hugging Face 字典、mmdetection、detectron2 和 Ultralytics 表格。检测到训练完成、指标变成 NaN 或进程崩溃时，前台弹 toast，后台发系统通知。上一次运行会作为虚线「幽灵」画在同一张图上，方便对比。整个过程只在本机进行，不在服务器上运行任何东西。
+
+**图片与 mask 预览。** 在文件树点图片会通过 SFTP 读取（5 MB 以内）并在独立窗口中预览，悬停显示像素坐标和值。8 位标签图（类别 id 0、1、2…，普通看图软件里一片黑）会被识别出来并按类别着色，旁边列出每个类别的像素占比；调色板 mask 也能识别。
+
 ## 构建与体积
 
 App 没有内嵌任何框架：AppKit、SwiftUI、Security、Metal 都是系统自带的。SwiftTerm 静态链接进来，release 构建会用 `-Osize` 编译并 strip。CI 每次构建都会打印 `.app` 的体积。
