@@ -7,6 +7,12 @@ macOS 原生的轻量 SSH 与 `tmux` 工作台。左侧切换服务器、浏览�
 - **远端零注入**：每个窗格挂到自己的 `lm_<槽位>` tmux 会话，断线、合盖、退出应用都不会中断任务。远端不会被装任何东西。
 - **零账号、零遥测、零 AI**：所有状态都在 `~/.config/litemux/state.json`，密码只放在 macOS 钥匙串里。
 
+![深色主题：同一台主机上的两个 tmux 槽位加一个本机窗格](docs/screenshots/dark.png)
+
+![浅色主题：SFTP 文件树](docs/screenshots/light.png)
+
+截图来自 CI：在 macOS 26 上对本机 sshd 真实连接后自动截取（见 `.github/workflows/ui-smoke.yml`）。
+
 ## 构建
 
 需要 macOS 14+ 和 Xcode 26（Swift 6.2）。
