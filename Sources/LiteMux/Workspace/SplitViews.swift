@@ -127,7 +127,7 @@ struct PaneView: View {
                 TerminalSurface(session: session)
                     .padding(.leading, 6)
                     .padding(.top, 4)
-                    .background(Theme.canvasColor)
+                    .background(Theme.canvasColor, ignoresSafeAreaEdges: [])
                 if case .ended(let code) = session.phase {
                     ReconnectBanner(remote: session.host.endpoint != nil, code: code,
                                     reconnect: { session.restart(); model.focusSoon(pane.id) },

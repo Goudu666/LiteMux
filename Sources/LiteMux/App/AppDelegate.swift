@@ -34,7 +34,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.contentView = host
         window.contentMinSize = NSSize(width: 720, height: 420)
         window.makeKeyAndOrderFront(nil)
-        Self.clearTitlebarBackdrop(window)
         model.window = window
         self.window = window
         NSApp.activate(ignoringOtherApps: true)
@@ -129,25 +128,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     // ⌘W is ours; the red close button still closes (and quits) as usual.
     func windowShouldClose(_ sender: NSWindow) -> Bool { true }
-
-    // AppKit may rebuild the title-bar views on these transitions.
-    func windowDidBecomeKey(_ notification: Notification) { Self.clearTitlebarBackdrop(window) }
-    func windowDidResize(_ notification: Notification) { Self.clearTitlebarBackdrop(window) }
-    func windowDidExitFullScreen(_ notification: Notification) { Self.clearTitlebarBackdrop(window) }
-
-    /// macOS 26 puts a backdrop (glass) layer across the whole title-bar row,
-    /// above the content view. With a transparent title bar that layer paints
-    /// the window background over our SwiftUI top bar, so the tabs vanish.
-    /// Hide just that layer; the traffic lights and drag behaviour stay native.
-    /// On earlier systems nothing matches and this is a no-op.
-    static func clearTitlebarBackdrop(_ window: NSWindow?) {
-        guard let titlebar = window?.standardWindowButton(.closeButton)?.superview else { return }
-        for view in titlebar.subviews where type(of: view) == NSView.self {
-            if let layer = view.layer, String(describing: type(of: layer)).contains("Backdrop") {
-                view.isHidden = true
-            }
-        }
-    }
 }
 
 @MainActor

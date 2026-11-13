@@ -159,7 +159,7 @@ struct WorkspaceView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.canvasColor)
+        .background(Theme.canvasColor, ignoresSafeAreaEdges: [])
     }
 }
 

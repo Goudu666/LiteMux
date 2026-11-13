@@ -19,7 +19,9 @@ struct RootView: View {
                         resizer
                     }
                     VStack(spacing: 0) {
-                        TopBar(model: model, height: titlebar)
+                        // Above the workspace: a background further down must
+                        // never be able to paint over the title-bar row.
+                        TopBar(model: model, height: titlebar).zIndex(1)
                         WorkspaceView(model: model)
                     }
                 }

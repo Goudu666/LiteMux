@@ -38,7 +38,7 @@ struct EditorPane: View {
             }
             .padding(.horizontal, 12)
             .frame(height: 30)
-            .background(Theme.chromeColor.opacity(0.6))
+            .background(Theme.chromeColor.opacity(0.6), ignoresSafeAreaEdges: [])
             .hairline(.bottom)
 
             CodeEditor(document: document, fontSize: CGFloat(model.state.fontSize))
