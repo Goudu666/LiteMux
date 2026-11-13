@@ -13,6 +13,10 @@ macOS 原生的轻量 SSH 与 `tmux` 工作台。左侧切换服务器、浏览�
 | --- | --- |
 | ![](docs/screenshots/light-files.png) | ![](docs/screenshots/dark.png) |
 
+四套配色，每套都有浅色和深色版本，可以在顶栏的外观菜单里切换：纸面 · 墨青、杏橘、雾蓝、樱粉。
+
+![四套配色](docs/screenshots/themes.png)
+
 截图来自 CI：在 macOS 26 上对本机 sshd 真实连接后自动截取（见 `.github/workflows/ui-smoke.yml`）。
 
 ## 构建
