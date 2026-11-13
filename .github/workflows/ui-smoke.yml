@@ -176,7 +176,10 @@ jobs:
           echo $! > app.pid
           sleep 17
           screencapture -x shots/light-pulse.png || true
+          sleep 4
+          screencapture -x shots/light-pulse-2.png || true
           kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-pulse.log; exit 1)
+          tail -40 shots/app-pulse.log
           kill $(cat app.pid) 2>/dev/null || true
           sleep 2
 

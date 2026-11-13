@@ -94,6 +94,8 @@ public struct TrainingRun: Equatable, Sendable, Identifiable {
     var sequence = 0
     var maxEpoch: Double = -1
     var zeroBased = false
+    /// x of the last record that said where it was.
+    var lastX: Double?
 
     public static func == (a: TrainingRun, b: TrainingRun) -> Bool {
         a.id == b.id && a.updatedAt == b.updatedAt && a.status == b.status && a.series == b.series
@@ -187,8 +189,8 @@ public final class TrainingTracker {
         self.now = now
     }
 
-    /// Joins soft-wrapped rows into logical lines. Rows that fill the whole width
-    /// are treated as wrapped too, because tmux redraws lose the wrap flag.
+    /// Joins soft-wrapped rows into logical lines. Rows that fill the width are
+    /// treated as wrapped too, because tmux redraws lose the wrap flag.
     public static func logicalLines(_ rows: [ScreenRow], cols: Int) -> [String] {
         var lines: [String] = []
         var previousFull = false
@@ -198,7 +200,8 @@ public final class TrainingTracker {
             } else {
                 lines.append(row.text)
             }
-            previousFull = cols > 8 && row.text.count >= cols
+            // tmux moves the wrapping space to the next row, so "full" is one short.
+            previousFull = cols > 8 && row.text.count >= cols - 1
         }
         return lines
     }
@@ -302,9 +305,17 @@ public final class TrainingTracker {
         } else if let s = r.step {
             x = Double(s)
         } else {
-            run.sequence += 1
-            x = Double(run.sequence)
+            if let last = run.lastX {
+                // Values only, e.g. the second half of a line the terminal wrapped,
+                // or a validation summary: it belongs where the log last was.
+                x = last
+            } else {
+                run.sequence += 1
+                x = Double(run.sequence)
+            }
         }
+
+        if r.hasProgress || r.isTableRow || stepFraction != nil { run.lastX = x }
 
         // Overall progress, when the total is known.
         if let total = run.epochTotal, total > 0, let p = progress {

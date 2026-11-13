@@ -200,6 +200,25 @@ final class TrainingTrackerTests: XCTestCase {
         XCTAssertEqual(run.status, .finished)
     }
 
+    /// What the CI smoke run shows: a narrow tmux pane wraps every line in two,
+    /// and a second run starts in the same pane after the first one finished.
+    func testWrappedLinesAndSecondRunLive() throws {
+        let t = tracker()
+        func rows(_ e: Int, _ loss: Double, lr: String) -> [String] {
+            [String(format: "Epoch %2ld/60  loss=%.4f  acc=0.5000  val_loss=%.4f", e, loss, loss + 0.1), String(format: " val_acc=0.4%03ld  lr=", e) + lr]
+        }
+        for e in 1...60 { t.ingest(lines: rows(e, 2.0 / Double(e), lr: String(format: "%.2e", 3e-4 / Double(e)))) }
+        XCTAssertEqual(t.current?.status, .finished)
+        XCTAssertEqual(t.current?.series(named: "val_acc")?.points.map(\.x), (1...60).map(Double.init))
+        XCTAssertEqual(t.ingest(lines: ["$ python train.py --lr 3e-4 --warmup 5"]), [])
+        XCTAssertEqual(t.ingest(lines: rows(1, 2.1, lr: "2.9e-04")), [.started])
+        t.ingest(lines: rows(2, 1.9, lr: "2.8e-04"))
+        let run = try XCTUnwrap(t.current)
+        XCTAssertEqual(run.status, .running)
+        XCTAssertEqual(run.series(named: "lr")?.points.map(\.x), [1, 2])
+        XCTAssertEqual(t.previous?.series(named: "loss")?.points.count, 60)
+    }
+
     func testHuggingFaceFractionalEpochs() throws {
         let t = tracker()
         t.ingest(lines: ["{'loss': 0.9, 'learning_rate': 5e-05, 'epoch': 0.25}", "{'loss': 0.7, 'learning_rate': 4e-05, 'epoch': 0.5}"])

@@ -19,6 +19,9 @@ final class PaneTraining {
     @ObservationIgnored private let pending = PendingFlag()
     @ObservationIgnored private var lastRevision = -1
 
+    /// CI smoke runs log every change to stderr.
+    private static let trace = ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PULSE"] == "1"
+
     /// Seconds between screen reads while output keeps coming.
     static let interval: TimeInterval = 0.35
 
@@ -44,6 +47,10 @@ final class PaneTraining {
         let events = tracker.ingest(rows: rows, cols: snapshot.dimensions.cols)
         guard tracker.revision != lastRevision else { return }
         lastRevision = tracker.revision
+        if Self.trace {
+            let c = tracker.current
+            FileHandle.standardError.write(Data("pulse rev=\(tracker.revision) epoch=\(c?.epoch ?? -1) status=\(String(describing: c?.status)) events=\(events)\n".utf8))
+        }
         run = tracker.current
         previous = tracker.previous
         if let run = tracker.current {
