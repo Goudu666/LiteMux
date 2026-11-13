@@ -13,7 +13,7 @@ private final class FakeShell: BridgeShell, @unchecked Sendable {
     }
 
     func run(_ script: String, on host: HostEntry, stdin: Data?, timeout: TimeInterval, outputLimit: Int) async -> ShellResult {
-        lock.lock(); ran.append((host.id, script, stdin)); lock.unlock()
+        lock.withLock { ran.append((host.id, script, stdin)) }
         return replies.first { script.contains($0.needle) }?.result ?? ShellResult(status: 0)
     }
 
@@ -46,7 +46,8 @@ final class BridgeServerTests: XCTestCase {
 
     private func call(_ server: MCPServer, _ id: Int, _ method: String, _ params: JSONValue = [:]) async throws -> JSONValue {
         let line = JSONValue.object(["jsonrpc": "2.0", "id": .number(Double(id)), "method": .string(method), "params": params]).serialized()
-        let response = try XCTUnwrap(await server.handle(line))
+        let handled = await server.handle(line)
+        let response = try XCTUnwrap(handled)
         let value = try JSONValue.parse(response)
         XCTAssertEqual(value["id"], .number(Double(id)))
         return value
@@ -77,7 +78,8 @@ final class BridgeServerTests: XCTestCase {
         let server = makeServer(FakeShell())
         let none = await server.handle(#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
         XCTAssertNil(none)
-        let bad = try JSONValue.parse(XCTUnwrap(await server.handle("{not json")))
+        let badLine = await server.handle("{not json")
+        let bad = try JSONValue.parse(XCTUnwrap(badLine))
         XCTAssertEqual(bad["error"]?["code"], -32700)
         let missing = try await call(server, 3, "no/such")
         XCTAssertEqual(missing["error"]?["code"], -32601)
