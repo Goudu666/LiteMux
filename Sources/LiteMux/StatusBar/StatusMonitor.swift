@@ -25,6 +25,8 @@ final class StatusMonitor {
     @ObservationIgnored private var previousTicks: CPUTicks?
     @ObservationIgnored private weak var hub: ConnectionHub?
     @ObservationIgnored private var currentHost: HostEntry?
+    /// Every fresh sample of a remote host (the GPU idle watch listens).
+    @ObservationIgnored var onSample: ((HostEntry, ServerSample) -> Void)?
 
     static let interval: UInt64 = 5_000_000_000
 
@@ -96,6 +98,7 @@ final class StatusMonitor {
                         let (output, latency) = try await ch.probe()
                         let parsed = ServerProbe.parse(output)
                         self.sample = ServerProbe.sample(from: parsed, previousTicks: self.previousTicks, latencyMs: latency)
+                        self.onSample?(host, self.sample)
                         if parsed.ticks != nil { self.previousTicks = parsed.ticks }
                         self.health = .online
                         hub.markOnline(hostID)

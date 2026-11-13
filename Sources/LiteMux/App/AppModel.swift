@@ -35,12 +35,17 @@ final class AppModel {
     var sidebarWidth: Double
     var connectionSheet: ConnectionDraft?
     var toastItem: Toast?
+    var showPulsePanel = false
+    var showAgentBridge = false
+    var showHostTools = false
 
     // Services.
     let hub = ConnectionHub()
     let files: FileBrowserModel
     let monitor: StatusMonitor
     let transfers = TransferCenter()
+    let hostTools = HostTools()
+    let gpuWatch = GPUIdleWatch()
 
     @ObservationIgnored private var sessions: [UUID: TerminalSession] = [:]
     @ObservationIgnored private let store = StateStore()
@@ -58,6 +63,9 @@ final class AppModel {
         monitor = StatusMonitor(hub: hub)
         files.app = self
         transfers.app = self
+        hostTools.app = self
+        monitor.onSample = { [weak self] host, sample in self?.gpuWatch.observe(sample, host: host) }
+        observeBridge()
         files.onPreferenceChange = { [weak self] in
             guard let self else { return }
             self.state.showHiddenFiles = self.files.showHidden
@@ -70,6 +78,33 @@ final class AppModel {
         reloadSSHConfig()
         restoreTabs()
         ThemeStore.shared.current = state.colorTheme
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PULSE"] == "1" {
+            // CI screenshot of the Training Pulse panel.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak self] in self?.showPulsePanel = true }
+        }
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_HOSTTOOLS"] == "1" {
+            // CI screenshot of the tunnels / tmux sessions popover.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 7) { [weak self] in self?.showHostTools = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                guard let self, let h = self.activeHost, !h.isLocal else { return }
+                Task {
+                    let f = await self.hostTools.forward(6006, on: h, open: false)
+                    FileHandle.standardError.write(Data("smoke: forward \(f?.localPort ?? -1)\n".utf8))
+                }
+            }
+        }
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_AGENTS"] == "1" {
+            // CI screenshot of the "接入 Coding Agent" sheet.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.showAgentBridge = true }
+        }
+        if let spec = ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PREVIEW"] {
+            // CI screenshot of the mask preview: "<hostID>|<path>".
+            let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                guard let self, parts.count == 2, let h = self.host(parts[0]) else { return }
+                self.previewImage(host: h, path: parts[1], size: 0)
+            }
+        }
         applyAppearance()
         activeHostChanged()
     }
@@ -144,11 +179,30 @@ final class AppModel {
     func session(for pane: PaneSpec) -> TerminalSession? {
         if let s = sessions[pane.id] { return s }
         guard let host = host(pane.hostID) else { return nil }
-        let s = TerminalSession(pane: pane, host: host, usesTmux: autoTmux(for: host.id) && pane.slot != nil,
+        let s = TerminalSession(pane: pane, host: host, usesTmux: pane.session != nil || (autoTmux(for: host.id) && pane.slot != nil),
                                 fontSize: CGFloat(state.fontSize), useMetal: state.useMetalRenderer, hub: hub)
         s.onFocus = { [weak self] id in self?.paneDidFocus(id) }
+        s.training.onEvent = { [weak self, weak s] event, run in
+            guard let self, let s else { return }
+            self.trainingEvent(event, run: run, in: s)
+        }
         sessions[pane.id] = s
         return s
+    }
+
+    // MARK: - Training Pulse
+
+    /// Curves for the focused terminal pane, shown in the status bar.
+    var focusedTraining: PaneTraining? {
+        guard let tab = selectedTab, tab.editor == nil, let pane = tab.focusedPane else { return nil }
+        return session(for: pane)?.training
+    }
+
+    private func trainingEvent(_ event: TrainingEvent, run: TrainingRun, in session: TerminalSession) {
+        let visible = selectedTab?.root?.contains(pane: session.pane.id) == true
+        TrainingNotifier.post(event, run: run, where: session.displayTitle, paneVisible: visible) { [weak self] text, style in
+            self?.toast(text, style: style)
+        }
     }
 
     private func usedSlots(for hostID: String) -> Set<Int> {
@@ -157,6 +211,62 @@ final class AppModel {
 
     private func newPane(host: HostEntry, directory: String? = nil) -> PaneSpec {
         PaneSpec(hostID: host.id, slot: SlotAllocator.nextSlot(used: usedSlots(for: host.id)), directory: directory)
+    }
+
+    // MARK: - tmux sessions
+
+    private func pane(showing session: String, hostID: String) -> (WorkspaceTab, PaneSpec)? {
+        for tab in tabs {
+            if let p = tab.root?.leaves.first(where: { $0.hostID == hostID && $0.tmuxSession == session }) { return (tab, p) }
+        }
+        return nil
+    }
+
+    func isTmuxSessionOpen(_ session: String, hostID: String) -> Bool { pane(showing: session, hostID: hostID) != nil }
+
+    /// Shows a tmux session in a tab of its own: `lm_<n>` as a LiteMux pane,
+    /// anything else (`train`, `bot`) attached directly, never nested.
+    func openTmuxSession(_ session: String, host: HostEntry, select: Bool) {
+        if let (tab, p) = pane(showing: session, hostID: host.id) {
+            if select {
+                selectTab(tab.id)
+                tab.focusedPaneID = p.id
+                focusSoon(p.id)
+            }
+            return
+        }
+        let pane: PaneSpec
+        if session.hasPrefix("lm_"), let n = Int(session.dropFirst(3)), !usedSlots(for: host.id).contains(n) {
+            pane = PaneSpec(hostID: host.id, slot: n)
+        } else {
+            pane = PaneSpec(hostID: host.id, slot: nil, session: session)
+        }
+        let tab = WorkspaceTab(root: .leaf(pane))
+        if let idx = tabs.firstIndex(where: { $0.id == selectedTabID }) {
+            tabs.insert(tab, at: idx + 1)
+        } else {
+            tabs.append(tab)
+        }
+        if select {
+            selectTab(tab.id)
+            focusSoon(pane.id)
+        }
+        scheduleSave()
+    }
+
+    /// `send_to_terminal` with session "new" opened a pane on the server: show it.
+    private func observeBridge() {
+        DistributedNotificationCenter.default().addObserver(forName: BridgeNotice.newSession, object: nil, queue: .main) { [weak self] note in
+            let hostID = note.userInfo?["host"] as? String
+            let session = note.userInfo?["session"] as? String
+            MainActor.assumeIsolated {
+                guard let model = self, let hostID, let session, let host = model.host(hostID) else { return }
+                model.openTmuxSession(session, host: host, select: false)
+                model.toast("Coding Agent 在 \(host.title) 开了新窗格 \(session)", style: .info, action: ("查看", { [weak model] in
+                    model?.openTmuxSession(session, host: host, select: true)
+                }))
+            }
+        }
     }
 
     func openTerminalTab(host: HostEntry, directory: String? = nil) {
@@ -307,6 +417,7 @@ final class AppModel {
         if let doc = tab.editor { return doc.fileName }
         guard let pane = tab.focusedPane else { return "终端" }
         guard let h = host(pane.hostID) else { return "终端" }
+        if let named = pane.session { return "\(h.title) · \(named)" }
         if !h.isLocal, autoTmux(for: h.id), let slot = pane.slot {
             return "\(h.title) · \(SSHInvocation.sessionName(slot: slot))"
         }
@@ -345,6 +456,7 @@ final class AppModel {
                     return
                 }
                 let doc = EditorDocument(hostID: host.id, path: path, text: text)
+                doc.stamp = try? await fs.stamp(of: path)
                 let tab = WorkspaceTab(editor: doc)
                 if let idx = tabs.firstIndex(where: { $0.id == selectedTabID }) {
                     tabs.insert(tab, at: idx + 1)
@@ -354,6 +466,34 @@ final class AppModel {
                 selectTab(tab.id)
             } catch {
                 toast("打开失败：\(error.localizedDescription)", style: .error)
+            }
+        }
+    }
+
+    /// Images (and segmentation masks) open in a Quick Look style window.
+    func previewImage(host: HostEntry, path: String, size: UInt64) {
+        let name = RemotePath.lastComponent(path)
+        Task {
+            do {
+                let fs = try await hub.fileSystem(for: host)
+                let realSize = (try? await fs.size(of: path)) ?? size
+                if case .tooLarge(let s)? = TextFileGate.check(size: realSize) {
+                    offerDownload(host: host, path: path, size: s, title: "「\(name)」太大，无法直接预览",
+                                  message: "文件大小 \(s.compactByteString)，超过 5 MB 的预览上限。可以下载后用本地工具查看。")
+                    return
+                }
+                let data = try await fs.readFile(path)
+                let place = host.isLocal ? path : "\(host.title):\(path)"
+                let image = await Task.detached(priority: .userInitiated) {
+                    PreviewImage.decode(data, name: name, place: place)
+                }.value
+                guard let image else {
+                    toast("无法解码图片「\(name)」", style: .error)
+                    return
+                }
+                ImagePreviewWindows.show(image)
+            } catch {
+                toast("预览失败：\(error.localizedDescription)", style: .error)
             }
         }
     }
@@ -379,7 +519,31 @@ final class AppModel {
         let snapshot = doc.text
         do {
             let fs = try await hub.fileSystem(for: host)
+            if let known = doc.stamp, let current = try? await fs.stamp(of: doc.path), current != known {
+                var detail = ""
+                if let m = current.modified {
+                    let f = DateFormatter()
+                    f.dateFormat = Calendar.current.isDateInToday(m) ? "HH:mm:ss" : "M月d日 HH:mm"
+                    detail = "（\(f.string(from: m))"
+                    if let a = known.size, let b = current.size, a != b { detail += "，\(a.compactByteString) → \(b.compactByteString)" }
+                    detail += "）"
+                }
+                switch Prompt.saveConflict(fileName: doc.fileName, detail: detail) {
+                case .cancel:
+                    return false
+                case .reload:
+                    let data = try await fs.readFile(doc.path)
+                    doc.replaceText(String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self))
+                    doc.stamp = current
+                    doc.lastError = nil
+                    toast("已重新加载 \(doc.fileName)", style: .info)
+                    return false
+                case .overwrite:
+                    break
+                }
+            }
             try await fs.writeFile(doc.path, data: Data(snapshot.utf8))
+            doc.stamp = try? await fs.stamp(of: doc.path)
             if doc.text == snapshot { doc.markSaved() }
             doc.lastError = nil
             toast("已保存 \(doc.fileName)", style: .success)

@@ -25,7 +25,9 @@ struct RootView: View {
                         WorkspaceView(model: model)
                     }
                 }
-                StatusBarView(monitor: model.monitor, transfers: model.transfers)
+                StatusBarView(monitor: model.monitor, transfers: model.transfers,
+                              training: model.focusedTraining, showPulse: $model.showPulsePanel,
+                              model: model, showHostTools: $model.showHostTools)
             }
             .ignoresSafeArea()
         }
@@ -33,6 +35,9 @@ struct RootView: View {
         .overlay(alignment: .bottom) { ToastView(model: model).padding(.bottom, 36) }
         .sheet(item: $model.connectionSheet) { draft in
             NewConnectionSheet(model: model, draft: draft)
+        }
+        .sheet(isPresented: $model.showAgentBridge) {
+            AgentBridgeSheet(model: model)
         }
         .animation(.easeOut(duration: 0.18), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.toastItem)
