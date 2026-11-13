@@ -198,10 +198,14 @@ jobs:
       # session the bridge smoke left running.
       - name: Launch and capture (light, host tools + port forward)
         run: |
-          # The runner's application firewall holds incoming connections to an
-          # unsigned python until someone answers its prompt; nobody will.
-          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off || true
-          python3 -m http.server 6006 --bind 127.0.0.1 --directory ~/exp > /dev/null 2>&1 &
+          # The runner's application firewall silently holds connections to an
+          # unsigned python (even on loopback), so the fake TensorBoard is the
+          # Apple-signed /usr/bin/nc answering one request at a time.
+          body="$(ls ~/exp)"
+          ( while true; do
+              printf 'HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s' "${#body}" "$body" \
+                | /usr/bin/nc -l 6006 > /dev/null 2>&1 || sleep 0.2
+            done ) &
           echo $! > web.pid
           LITEMUX_SMOKE_HOSTTOOLS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-hosttools.log 2>&1 &
           echo $! > app.pid
@@ -215,6 +219,7 @@ jobs:
           curl -sS -m 5 "http://127.0.0.1:$port/" 2>&1 | head -n 12 | tee shots/forward.txt
           kill $(cat app.pid) 2>/dev/null || true
           kill $(cat web.pid) 2>/dev/null || true
+          pkill -f "nc -l 6006" 2>/dev/null || true
           sleep 2
           grep -q "config.yaml" shots/forward.txt && echo "PORT FORWARD OK" || (echo "PORT FORWARD FAILED"; grep smoke shots/app-hosttools.log; tail -30 shots/app-hosttools.log; exit 1)
 
