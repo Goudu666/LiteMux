@@ -199,7 +199,7 @@ def full(exe, host):
     text, err = b.tool("send_to_terminal", host=host, session="new", cwd="~/exp", text="echo from-new-pane; pwd", wait_seconds=2)
     expect(not err and "from-new-pane" in text and "新窗格 tmux lm_" in text, "send_to_terminal opens a fresh lm_ pane")
     new_session = text.split("新窗格 tmux ")[1].split("（")[0].split("。")[0].strip()
-    expect(new_session not in ("lm_1", "lm_2", "lm_3", "lm_4"), f"the new pane ({new_session}) avoids slots open in LiteMux")
+    expect(new_session not in ("lm_1", "lm_2"), f"the new pane ({new_session}) avoids lab1 slots open in LiteMux")
     subprocess.run([tmux, "kill-session", "-t", new_session], stderr=subprocess.DEVNULL)
 
     text, err = b.tool("read_terminal", host="no-such-host")
