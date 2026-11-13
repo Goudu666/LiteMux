@@ -19,12 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.title = "LiteMux"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        // An empty compact toolbar gives the traffic lights a taller,
-        // centred title-bar row that our SwiftUI bars draw into.
-        let toolbar = NSToolbar(identifier: "LiteMuxToolbar")
-        toolbar.showsBaselineSeparator = false
-        window.toolbar = toolbar
-        window.toolbarStyle = .unifiedCompact
+        // No NSToolbar: on macOS 26 its glass background would cover our bar.
+        // The SwiftUI top bar draws straight into the transparent title-bar row.
         window.isMovableByWindowBackground = false
         window.tabbingMode = .disallowed
         window.collectionBehavior.insert(.fullScreenPrimary)

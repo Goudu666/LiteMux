@@ -9,7 +9,7 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geo in
             // The title bar row; our bars share it with the traffic lights.
-            let titlebar = max(38, geo.safeAreaInsets.top)
+            let titlebar = max(30, geo.safeAreaInsets.top)
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     if model.sidebarVisible {
