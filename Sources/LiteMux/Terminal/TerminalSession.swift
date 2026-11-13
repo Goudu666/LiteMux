@@ -59,6 +59,8 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
     let host: HostEntry
     let usesTmux: Bool
     let view: LiteTerminalView
+    /// Training Pulse: curves recognised in what this pane shows.
+    let training = PaneTraining()
     @ObservationIgnored weak var hub: ConnectionHub?
     @ObservationIgnored var onFocus: ((UUID) -> Void)?
     @ObservationIgnored var onEnded: ((TerminalSession) -> Void)?
@@ -85,6 +87,7 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
             self.onFocus?(self.pane.id)
         }
         v.onReturnWhileEnded = { [weak self] in self?.restart() }
+        training.attach(to: v)
     }
 
     var displayTitle: String {

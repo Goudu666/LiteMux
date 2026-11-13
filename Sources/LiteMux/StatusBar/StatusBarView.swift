@@ -5,6 +5,8 @@ import LiteMuxCore
 struct StatusBarView: View {
     let monitor: StatusMonitor
     let transfers: TransferCenter
+    var training: PaneTraining?
+    @Binding var showPulse: Bool
 
     var body: some View {
         let s = monitor.sample
@@ -21,6 +23,13 @@ struct StatusBarView: View {
                 }
             }
             .padding(.trailing, 4)
+
+            if let training, training.hasCurves {
+                HStack(spacing: 0) {
+                    Separator()
+                    PulseChip(training: training, showPanel: $showPulse).padding(.horizontal, 4)
+                }
+            }
 
             if let cpu = s.cpuPercent {
                 Cell { Text("CPU ").foregroundStyle(.secondary) + Text(String(format: "%.0f%%", cpu)).foregroundColor(level(cpu / 100)) }

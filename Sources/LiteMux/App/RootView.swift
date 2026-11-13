@@ -25,7 +25,8 @@ struct RootView: View {
                         WorkspaceView(model: model)
                     }
                 }
-                StatusBarView(monitor: model.monitor, transfers: model.transfers)
+                StatusBarView(monitor: model.monitor, transfers: model.transfers,
+                              training: model.focusedTraining, showPulse: $model.showPulsePanel)
             }
             .ignoresSafeArea()
         }

@@ -58,12 +58,29 @@ jobs:
           EOF
           ssh -o BatchMode=yes -o ConnectTimeout=5 lab1 'echo ssh-ok; command -v tmux'
           # A running "training job" in the slot the first pane will attach to.
+          # A fake but realistic run: decaying loss, rising accuracy, cosine lr.
+          # Usage: train.sh <epochs> <seconds per epoch> <decay>
+          cat > ~/epochs.sh <<'EOF'
+          n=$1; pause=$2; tau=$3
+          for i in $(seq 1 "$n"); do
+            awk -v i="$i" -v n="$n" -v t="$tau" -v s="$RANDOM" 'BEGIN { srand(s)
+              l = 2.2*exp(-i/t) + 0.08 + rand()*0.06; v = l*1.1 + 0.03 + rand()*0.05
+              a = 1 - 0.9*exp(-i/(t*0.8)) - rand()*0.02
+              printf "Epoch %2d/%d  loss=%.4f  acc=%.4f  val_loss=%.4f  val_acc=%.4f  lr=%.1e\n", i, n, l, a, v, a-0.02-rand()*0.02, 3e-4*0.5*(1+cos(3.14159*i/n)) }'
+            sleep "$pause"
+          done
+          EOF
           cat > ~/train.sh <<'EOF'
           cd ~/exp 2>/dev/null || cd ~
-          for i in $(seq 1 40); do
-            printf "Epoch %2d/40  loss=0.%03d  acc=0.9%02d  lr=3e-4\n" "$i" $((RANDOM%900+100)) $((RANDOM%99))
-            sleep 0.05
-          done
+          bash ~/epochs.sh 40 0.05 12
+          exec zsh -l
+          EOF
+          # Pulse screenshot: a finished first run (drawn as a ghost), then a live second run.
+          cat > ~/train2.sh <<'EOF'
+          cd ~/exp 2>/dev/null || cd ~
+          sleep 6
+          echo '$ python train.py --lr 1e-3'; bash ~/epochs.sh 60 0.04 20
+          echo '$ python train.py --lr 3e-4 --warmup 5'; bash ~/epochs.sh 60 0.45 11
           exec zsh -l
           EOF
           ssh -o BatchMode=yes lab1 "/opt/homebrew/bin/tmux new-session -d -s lm_1 'bash ~/train.sh'" || true
@@ -123,6 +140,23 @@ jobs:
           sleep 14
           screencapture -x shots/light-files.png || true
           kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light-files.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
+      - name: Launch and capture (light, Training Pulse)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          ssh -o BatchMode=yes lab1 "/opt/homebrew/bin/tmux kill-session -t lm_1; /opt/homebrew/bin/tmux new-session -d -s lm_1 'bash ~/train2.sh'" || true
+          LITEMUX_SMOKE_PULSE=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-pulse.log 2>&1 &
+          echo $! > app.pid
+          sleep 17
+          screencapture -x shots/light-pulse.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-pulse.log; exit 1)
           kill $(cat app.pid) 2>/dev/null || true
           sleep 2
 

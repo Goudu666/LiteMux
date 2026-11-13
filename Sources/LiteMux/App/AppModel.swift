@@ -35,6 +35,7 @@ final class AppModel {
     var sidebarWidth: Double
     var connectionSheet: ConnectionDraft?
     var toastItem: Toast?
+    var showPulsePanel = false
 
     // Services.
     let hub = ConnectionHub()
@@ -70,6 +71,10 @@ final class AppModel {
         reloadSSHConfig()
         restoreTabs()
         ThemeStore.shared.current = state.colorTheme
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PULSE"] == "1" {
+            // CI screenshot of the Training Pulse panel.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak self] in self?.showPulsePanel = true }
+        }
         applyAppearance()
         activeHostChanged()
     }
@@ -147,8 +152,27 @@ final class AppModel {
         let s = TerminalSession(pane: pane, host: host, usesTmux: autoTmux(for: host.id) && pane.slot != nil,
                                 fontSize: CGFloat(state.fontSize), useMetal: state.useMetalRenderer, hub: hub)
         s.onFocus = { [weak self] id in self?.paneDidFocus(id) }
+        s.training.onEvent = { [weak self, weak s] event, run in
+            guard let self, let s else { return }
+            self.trainingEvent(event, run: run, in: s)
+        }
         sessions[pane.id] = s
         return s
+    }
+
+    // MARK: - Training Pulse
+
+    /// Curves for the focused terminal pane, shown in the status bar.
+    var focusedTraining: PaneTraining? {
+        guard let tab = selectedTab, tab.editor == nil, let pane = tab.focusedPane else { return nil }
+        return session(for: pane)?.training
+    }
+
+    private func trainingEvent(_ event: TrainingEvent, run: TrainingRun, in session: TerminalSession) {
+        let visible = selectedTab?.root?.contains(pane: session.pane.id) == true
+        TrainingNotifier.post(event, run: run, where: session.displayTitle, paneVisible: visible) { [weak self] text, style in
+            self?.toast(text, style: style)
+        }
     }
 
     private func usedSlots(for hostID: String) -> Set<Int> {
