@@ -133,8 +133,10 @@ public struct ProcessBridgeShell: BridgeShell {
             let state = ExecutionState(limit: outputLimit)
             let finish: @Sendable (Int32?) -> Void = { status in
                 guard let result = state.finish(status: status ?? -1, started: started) else { return }
+                trace("done status=\(result.status) out=\(result.stdout.count)B err=\(result.stderr.count)B timedOut=\(result.timedOut) \(String(format: "%.2fs", result.duration))")
                 cont.resume(returning: result)
             }
+            trace("exec \(executable) \(arguments.suffix(2).joined(separator: " ").prefix(120))")
             do {
                 try p.run()
             } catch {
@@ -175,13 +177,26 @@ public struct ProcessBridgeShell: BridgeShell {
             }
             timer.resume()
             DispatchQueue.global().async {
-                group.wait()
                 p.waitUntilExit()
                 timer.cancel()
+                // Normally the pipes drain at once. Something that outlives the
+                // command (a backgrounded job, an ssh mux master) may keep them
+                // open: answer with what we have instead of waiting for it.
+                if group.wait(timeout: .now() + 3) == .timedOut {
+                    trace("pipes still open 3s after exit: \(executable) \(arguments.last ?? "")")
+                }
                 finish(p.terminationStatus)
             }
         }
     }
+}
+
+/// CI smoke runs (`LITEMUX_SMOKE_BRIDGE=1`) log every process to stderr.
+private let tracing = ProcessInfo.processInfo.environment["LITEMUX_SMOKE_BRIDGE"] == "1"
+
+private func trace(_ message: @autoclosure () -> String) {
+    guard tracing else { return }
+    FileHandle.standardError.write(Data(("bridge: " + message() + "\n").utf8))
 }
 
 /// Shared between the reader threads, the timer and the finisher.

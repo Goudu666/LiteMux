@@ -221,6 +221,9 @@ public actor MCPServer {
             throw RPCError(code: -32602, message: "Unknown tool: \(name)")
         }
         let call = BridgeCall(arguments: params["arguments"] ?? .object([:]), client: clientName, tool: tool)
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_BRIDGE"] == "1" {
+            FileHandle.standardError.write(Data("bridge: call \(name) \((params["arguments"] ?? .null).serialized().prefix(160))\n".utf8))
+        }
         call.authorizeImpl = { [weak self] call, action, detail in
             guard let self else { throw BridgeToolError("LiteMux Bridge 已关闭。") }
             try await self.authorize(call, action: action, detail: detail)

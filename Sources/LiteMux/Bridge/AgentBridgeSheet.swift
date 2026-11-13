@@ -135,6 +135,7 @@ struct AgentBridgeSheet: View {
                     .font(.system(size: 11.5, design: .monospaced))
                     .textSelection(.enabled)
                     .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)

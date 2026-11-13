@@ -187,6 +187,8 @@ jobs:
       # would, against the real sshd + tmux, while lm_1 is still training.
       - name: LiteMux Bridge (MCP) end to end
         run: |
+          set -o pipefail
+          export LITEMUX_SMOKE_BRIDGE=1
           python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 2>&1 | tee shots/bridge-e2e.txt
           python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 --confirm-shot shots/bridge-confirm.png 2>&1 | tee -a shots/bridge-e2e.txt || true
           tail -n 5 ~/.config/litemux/bridge-activity.jsonl || true
