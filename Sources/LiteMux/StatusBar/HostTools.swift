@@ -14,9 +14,11 @@ final class HostTools {
         let remotePort: Int
         let localPort: Int
         var label: String
+        /// Where the service listens on the remote side (IPv4 unless it is IPv6-only).
+        var remoteAddress = "127.0.0.1"
         var id: String { "\(hostID):\(localPort)" }
         var url: URL { URL(string: "http://localhost:\(localPort)")! }
-        var spec: String { "127.0.0.1:\(localPort):localhost:\(remotePort)" }
+        var spec: String { "127.0.0.1:\(localPort):\(remoteAddress):\(remotePort)" }
     }
 
     struct Session: Identifiable, Hashable {
@@ -90,10 +92,17 @@ final class HostTools {
             return nil
         }
         let name = label ?? ports.first(where: { $0.port == remotePort })?.label ?? "端口 \(remotePort)"
-        let f = Forward(hostID: host.id, remotePort: remotePort, localPort: local, label: name)
+        var f = Forward(hostID: host.id, remotePort: remotePort, localPort: local, label: name)
+        if let addrs = ports.first(where: { $0.port == remotePort })?.addresses,
+           !addrs.isEmpty, addrs.allSatisfy({ $0.contains(":") }) {
+            f.remoteAddress = "[::1]"
+        }
         let args = ["-o", "ControlPath=\(app.hub.invocation.controlPath)", "-O", "forward", "-L", f.spec]
             + endpoint.arguments(home: app.hub.invocation.home)
         let r = await ProcessRunner.run(SSHInvocation.sshPath, args, environment: app.hub.environment(for: host), timeout: 6)
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_HOSTTOOLS"] == "1" {
+            FileHandle.standardError.write(Data("smoke: ssh \(args.joined(separator: " ")) → \(r.status) \(r.stderr)\n".utf8))
+        }
         guard r.status == 0 else {
             let reason = r.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             let noMaster = reason.contains("No such file") || reason.contains("Control socket") || reason.contains("No ControlPath")

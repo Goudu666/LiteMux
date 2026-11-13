@@ -207,11 +207,12 @@ jobs:
           kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-hosttools.log; exit 1)
           port=$(grep -o 'smoke: forward [0-9-]*' shots/app-hosttools.log | awk '{print $3}')
           echo "forwarded to local port: $port"
-          curl -s -m 5 "http://127.0.0.1:$port/" | head -n 12 | tee shots/forward.txt
+          lsof -nP -iTCP:"$port" -sTCP:LISTEN || true
+          curl -sS -m 5 "http://127.0.0.1:$port/" 2>&1 | head -n 12 | tee shots/forward.txt
           kill $(cat app.pid) 2>/dev/null || true
           kill $(cat web.pid) 2>/dev/null || true
           sleep 2
-          grep -q "config.yaml" shots/forward.txt && echo "PORT FORWARD OK" || (echo "PORT FORWARD FAILED"; tail -30 shots/app-hosttools.log; exit 1)
+          grep -q "config.yaml" shots/forward.txt && echo "PORT FORWARD OK" || (echo "PORT FORWARD FAILED"; grep smoke shots/app-hosttools.log; tail -30 shots/app-hosttools.log; exit 1)
 
       - name: Launch and capture (light, agent sheet)
         run: |
