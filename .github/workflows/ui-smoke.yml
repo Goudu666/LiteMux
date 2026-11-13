@@ -7,6 +7,9 @@ on:
   push:
     branches: ["claude/**"]
 
+permissions:
+  contents: write
+
 concurrency:
   group: ui-smoke-${{ github.ref }}
   cancel-in-progress: true
@@ -123,16 +126,18 @@ jobs:
           ls ~/.ssh/lm 2>/dev/null || true
           tail -20 shots/app-light.log || true
 
-      - name: Print screenshots (base64 JPEG)
+      # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
+      # them with git: `git fetch origin refs/ci/screenshots`.
+      - name: Publish screenshots to refs/ci/screenshots
         if: always()
+        env:
+          TOKEN: ${{ github.token }}
         run: |
-          for f in shots/*.png; do
-            sips -Z 1100 -s format jpeg -s formatOptions 50 "$f" --out "${f%.png}.jpg" >/dev/null
-            echo "@@IMG-BEGIN $(basename "${f%.png}")"
-            base64 -b 3000 -i "${f%.png}.jpg"
-            echo "@@IMG-END"
-          done
-          echo "--- app logs ---"; cat shots/*.log || true
+          cd shots
+          git init -q
+          git add -A
+          git -c user.name="${{ github.actor }}" -c user.email="${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com" commit -qm "ui smoke screenshots"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}" HEAD:refs/ci/screenshots
 
       - uses: actions/upload-artifact@v4
         if: always()
