@@ -193,6 +193,26 @@ jobs:
           python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 --confirm-shot shots/bridge-confirm.png 2>&1 | tee -a shots/bridge-e2e.txt || true
           tail -n 5 ~/.config/litemux/bridge-activity.jsonl || true
 
+      # Tunnels and tmux sessions behind the host name: a fake TensorBoard on
+      # 6006 (taken locally too, so the tunnel lands on 6007) and the "train"
+      # session the bridge smoke left running.
+      - name: Launch and capture (light, host tools + port forward)
+        run: |
+          python3 -m http.server 6006 --bind 127.0.0.1 --directory ~/exp > /dev/null 2>&1 &
+          echo $! > web.pid
+          LITEMUX_SMOKE_HOSTTOOLS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-hosttools.log 2>&1 &
+          echo $! > app.pid
+          sleep 14
+          screencapture -x shots/light-hosttools.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-hosttools.log; exit 1)
+          port=$(grep -o 'smoke: forward [0-9-]*' shots/app-hosttools.log | awk '{print $3}')
+          echo "forwarded to local port: $port"
+          curl -s -m 5 "http://127.0.0.1:$port/" | head -n 12 | tee shots/forward.txt
+          kill $(cat app.pid) 2>/dev/null || true
+          kill $(cat web.pid) 2>/dev/null || true
+          sleep 2
+          grep -q "config.yaml" shots/forward.txt && echo "PORT FORWARD OK" || (echo "PORT FORWARD FAILED"; tail -30 shots/app-hosttools.log; exit 1)
+
       - name: Launch and capture (light, agent sheet)
         run: |
           LITEMUX_SMOKE_AGENTS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-agents.log 2>&1 &

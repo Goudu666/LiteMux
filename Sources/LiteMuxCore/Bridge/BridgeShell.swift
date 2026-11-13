@@ -28,6 +28,15 @@ public protocol BridgeShell: Sendable {
     func run(_ script: String, on host: HostEntry, stdin: Data?, timeout: TimeInterval, outputLimit: Int) async -> ShellResult
     /// Whether LiteMux already holds a multiplexed tunnel to the host.
     func isConnected(_ host: HostEntry) async -> Bool
+    /// Runs a script whose stdin is read from `input` and whose stdout goes to
+    /// `output` (local files), for transfers of any size and any bytes.
+    func stream(_ script: String, on host: HostEntry, input: URL?, output: URL?, timeout: TimeInterval) async -> ShellResult
+}
+
+public extension BridgeShell {
+    func stream(_ script: String, on host: HostEntry, input: URL?, output: URL?, timeout: TimeInterval) async -> ShellResult {
+        ShellResult(status: 127, stderr: Data("这个连接不支持文件传输。".utf8))
+    }
 }
 
 /// Keeps the first `head` and the last `tail` bytes of a stream.
@@ -84,6 +93,11 @@ public struct ProcessBridgeShell: BridgeShell {
     }
 
     public func sshArguments(for endpoint: SSHEndpoint, usesAskpass: Bool, script: String) -> [String] {
+        connectionArguments(usesAskpass: usesAskpass) + endpoint.arguments(home: invocation.home) + ["sh -c " + ShellWords.quote(script)]
+    }
+
+    /// Rides an existing master, never starts one, never prompts.
+    public func connectionArguments(usesAskpass: Bool) -> [String] {
         var args = ["-T",
                     "-o", "ControlMaster=no",
                     "-o", "ControlPath=\(invocation.controlPath)",
@@ -91,8 +105,6 @@ public struct ProcessBridgeShell: BridgeShell {
                     "-o", "ServerAliveInterval=15",
                     "-o", "ServerAliveCountMax=3"]
         args += usesAskpass ? SSHInvocation.askpassOptions : ["-o", "BatchMode=yes"]
-        args += endpoint.arguments(home: invocation.home)
-        args.append("sh -c " + ShellWords.quote(script))
         return args
     }
 
@@ -105,6 +117,17 @@ public struct ProcessBridgeShell: BridgeShell {
         }
         return await Self.execute("/bin/sh", ["-c", script], environment: env, directory: invocation.home,
                                   stdin: stdin, timeout: timeout, outputLimit: outputLimit)
+    }
+
+    public func stream(_ script: String, on host: HostEntry, input: URL?, output: URL?, timeout: TimeInterval) async -> ShellResult {
+        let env = environment(host)
+        if let endpoint = host.endpoint {
+            let args = sshArguments(for: endpoint, usesAskpass: host.hasSavedPassword, script: script)
+            return await Self.execute(SSHInvocation.sshPath, args, environment: env, directory: nil, stdin: nil,
+                                      timeout: timeout, outputLimit: 64_000, stdinFile: input?.path, stdoutFile: output?.path)
+        }
+        return await Self.execute("/bin/sh", ["-c", script], environment: env, directory: invocation.home, stdin: nil,
+                                  timeout: timeout, outputLimit: 64_000, stdinFile: input?.path, stdoutFile: output?.path)
     }
 
     public func isConnected(_ host: HostEntry) async -> Bool {
@@ -121,8 +144,11 @@ public struct ProcessBridgeShell: BridgeShell {
     /// descriptors), its own process group (a timeout kills the whole job),
     /// default signal handling (the app ignores SIGPIPE), and no blocking call
     /// ever waits on a shared worker pool.
+    /// `stdinFile` / `stdoutFile` connect the child straight to local files
+    /// (stdout is then not captured), so transfers never pass through memory.
     public static func execute(_ executable: String, _ arguments: [String], environment: [String: String]?,
-                               directory: String?, stdin: Data?, timeout: TimeInterval, outputLimit: Int) async -> ShellResult {
+                               directory: String?, stdin: Data?, timeout: TimeInterval, outputLimit: Int,
+                               stdinFile: String? = nil, stdoutFile: String? = nil) async -> ShellResult {
         await withCheckedContinuation { (cont: CheckedContinuation<ShellResult, Never>) in
             let started = Date()
             let state = ExecutionState(limit: outputLimit)
@@ -149,9 +175,13 @@ public struct ProcessBridgeShell: BridgeShell {
             if stdin != nil {
                 posix_spawn_file_actions_adddup2(&actions, inPipe[0], 0)
             } else {
-                posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0)
+                posix_spawn_file_actions_addopen(&actions, 0, stdinFile ?? "/dev/null", O_RDONLY, 0)
             }
-            posix_spawn_file_actions_adddup2(&actions, outPipe[1], 1)
+            if let stdoutFile {
+                posix_spawn_file_actions_addopen(&actions, 1, stdoutFile, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
+            } else {
+                posix_spawn_file_actions_adddup2(&actions, outPipe[1], 1)
+            }
             posix_spawn_file_actions_adddup2(&actions, errPipe[1], 2)
             if let directory { posix_spawn_file_actions_addchdir_np(&actions, directory) }
 

@@ -136,3 +136,45 @@ public enum ServerProbe {
         return s
     }
 }
+
+/// Notices a GPU going quiet after real work: a finished (or dead) job on a
+/// machine rented by the hour.
+public struct GPUIdleDetector: Sendable {
+    public var idleAfter: TimeInterval
+    public var minimumBusy: TimeInterval
+    private var busySince: Date?
+    private var lastBusy: Date?
+    private var idleSince: Date?
+
+    public init(idleAfter: TimeInterval = 300, minimumBusy: TimeInterval = 120) {
+        self.idleAfter = idleAfter
+        self.minimumBusy = minimumBusy
+    }
+
+    static func isBusy(_ g: GPUReading) -> Bool { g.utilization >= 30 || g.memoryFraction >= 0.10 }
+    static func isIdle(_ g: GPUReading) -> Bool { g.utilization < 5 && g.memoryFraction < 0.05 }
+
+    /// True exactly once per busy → idle transition, `idleAfter` into the quiet.
+    public mutating func observe(_ gpus: [GPUReading], at now: Date = Date()) -> Bool {
+        guard !gpus.isEmpty else { return false }
+        if gpus.contains(where: Self.isBusy) {
+            if busySince == nil { busySince = now }
+            lastBusy = now
+            idleSince = nil
+            return false
+        }
+        guard gpus.allSatisfy(Self.isIdle) else { idleSince = nil; return false }
+        guard let start = busySince, let end = lastBusy, end.timeIntervalSince(start) >= minimumBusy else {
+            busySince = nil
+            return false
+        }
+        if idleSince == nil { idleSince = now }
+        if let quiet = idleSince, now.timeIntervalSince(quiet) >= idleAfter {
+            busySince = nil
+            lastBusy = nil
+            idleSince = nil
+            return true
+        }
+        return false
+    }
+}

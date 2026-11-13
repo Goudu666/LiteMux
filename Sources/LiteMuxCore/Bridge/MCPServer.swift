@@ -14,6 +14,8 @@ public struct BridgeConfirmation: Sendable, Equatable {
     public var action: String
     /// The command, keys or file preview, shown in monospace.
     public var detail: String
+    /// `detail` is a diff: lines starting with "+ " / "- " are colored.
+    public var isDiff = false
 }
 
 public enum BridgeDecision: Sendable, Equatable {
@@ -40,7 +42,7 @@ public final class BridgeCall: @unchecked Sendable {
     public let client: String
     public var host: HostEntry?
     public var summary = ""
-    fileprivate var authorizeImpl: (BridgeCall, String, String) async throws -> Void = { _, _, _ in }
+    fileprivate var authorizeImpl: (BridgeCall, String, String, Bool) async throws -> Void = { _, _, _, _ in }
     fileprivate let tool: BridgeTool
 
     fileprivate init(arguments: JSONValue, client: String, tool: BridgeTool) {
@@ -67,8 +69,8 @@ public final class BridgeCall: @unchecked Sendable {
     public func bool(_ key: String, default value: Bool) -> Bool { arguments[key]?.boolValue ?? value }
 
     /// Asks the user (depending on the mode). Throws when denied.
-    public func authorize(action: String, detail: String) async throws {
-        try await authorizeImpl(self, action, detail)
+    public func authorize(action: String, detail: String, isDiff: Bool = false) async throws {
+        try await authorizeImpl(self, action, detail, isDiff)
     }
 }
 
@@ -78,10 +80,14 @@ public struct BridgeTool: Sendable {
     public var description: String
     public var access: BridgeAccess
     public var inputSchema: JSONValue
+    /// Old names that still work but are not listed.
+    public var aliases: [String]
     public var handler: @Sendable (BridgeCall) async throws -> BridgeToolResult
 
     public init(name: String, title: String, description: String, access: BridgeAccess,
-                inputSchema: JSONValue, handler: @escaping @Sendable (BridgeCall) async throws -> BridgeToolResult) {
+                inputSchema: JSONValue, aliases: [String] = [],
+                handler: @escaping @Sendable (BridgeCall) async throws -> BridgeToolResult) {
+        self.aliases = aliases
         self.name = name
         self.title = title
         self.description = description
@@ -114,16 +120,19 @@ public struct BridgeTool: Sendable {
 /// to stdin/stdout and an NSAlert.
 public actor MCPServer {
     public static let supportedVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
-    public static let serverVersion = "0.2.0"
+    public static let serverVersion = "0.3.0"
 
     public static let instructions = """
     LiteMux is the user's SSH/tmux workbench for GPU training servers. These tools reach the \
-    servers the user has open in LiteMux, through LiteMux's own SSH connections. Start with \
-    list_hosts. read_terminal and training_status read what the user's terminal panes show \
-    (LiteMux panes are tmux sessions named lm_1, lm_2, …); gpu_status shows GPUs, memory and disk. \
-    Prefer reading before acting. Long jobs (training) belong in a terminal pane via \
-    send_to_terminal so they survive disconnects; use run_command for short, non-interactive \
-    commands. Commands and writes may need the user's approval in a LiteMux dialog.
+    servers the user has open in LiteMux, through LiteMux's own SSH connections (saved \
+    passwords included). Start with list_hosts. read_terminal and training_status read what the \
+    user's terminal panes show (LiteMux panes are tmux sessions named lm_1, lm_2, …; other tmux \
+    sessions work by name); host_status shows GPUs, memory, disks, ports and services. Prefer \
+    reading before acting. Long jobs (training) belong in a terminal pane via send_to_terminal \
+    (session "new" opens a fresh pane) so they survive disconnects; use run_command for short, \
+    non-interactive commands. Change files with edit_file (exact replacement) rather than \
+    rewriting them; move binaries and folders with download_file / upload_file. Commands and \
+    writes may need the user's approval in a LiteMux dialog.
     """
 
     private let tools: [BridgeTool]
@@ -217,16 +226,16 @@ public actor MCPServer {
 
     private func callTool(_ params: JSONValue) async throws -> JSONValue {
         guard let name = params["name"]?.stringValue else { throw RPCError(code: -32602, message: "Missing tool name") }
-        guard let tool = tools.first(where: { $0.name == name }) else {
+        guard let tool = tools.first(where: { $0.name == name }) ?? tools.first(where: { $0.aliases.contains(name) }) else {
             throw RPCError(code: -32602, message: "Unknown tool: \(name)")
         }
         let call = BridgeCall(arguments: params["arguments"] ?? .object([:]), client: clientName, tool: tool)
         if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_BRIDGE"] == "1" {
             FileHandle.standardError.write(Data("bridge: call \(name) \((params["arguments"] ?? .null).serialized().prefix(160))\n".utf8))
         }
-        call.authorizeImpl = { [weak self] call, action, detail in
+        call.authorizeImpl = { [weak self] call, action, detail, isDiff in
             guard let self else { throw BridgeToolError("LiteMux Bridge 已关闭。") }
-            try await self.authorize(call, action: action, detail: detail)
+            try await self.authorize(call, action: action, detail: detail, isDiff: isDiff)
         }
         var outcome = BridgeActivity.Outcome.ok
         let result: BridgeToolResult
@@ -255,7 +264,7 @@ public actor MCPServer {
 
     struct Denied: Error { var message: String }
 
-    private func authorize(_ call: BridgeCall, action: String, detail: String) async throws {
+    private func authorize(_ call: BridgeCall, action: String, detail: String, isDiff: Bool) async throws {
         switch mode() {
         case .trusted: return
         case .readOnly: throw Denied(message: "LiteMux 处于只读模式。")
@@ -264,7 +273,7 @@ public actor MCPServer {
         let key = call.tool.name + "|" + (call.host?.id ?? "")
         if allowed.contains(key) { return }
         let request = BridgeConfirmation(client: clientName, tool: call.tool.name,
-                                         hostTitle: call.host?.title ?? "本机", action: action, detail: detail)
+                                         hostTitle: call.host?.title ?? "本机", action: action, detail: detail, isDiff: isDiff)
         switch await confirm(request) {
         case .allowOnce: return
         case .allowForSession: allowed.insert(key)

@@ -359,6 +359,7 @@ struct FileMenu: View {
         }
         if let entry, entry.behavesAsDirectory {
             Button("进入此目录") { browser.enter(entry) }
+            Button("下载整个文件夹到“下载”") { browser.download(entry) }
         }
         Button("在此目录打开新终端") { browser.openTerminal(at: dir) }
         Divider()

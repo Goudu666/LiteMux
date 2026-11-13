@@ -4,15 +4,24 @@ import Foundation
 public struct BridgeToolbox: Sendable {
     public var shell: BridgeShell
     public var directory: @Sendable () -> BridgeHostDirectory
+    /// Where relative local paths of transfers start: the agent's working directory.
+    public var localDirectory: String
+    /// Called after `send_to_terminal` opened a new `lm_<n>` session, so a
+    /// running LiteMux can show it as a pane.
+    public var onNewSession: (@Sendable (HostEntry, String) -> Void)?
 
-    public init(shell: BridgeShell, directory: @escaping @Sendable () -> BridgeHostDirectory) {
+    public init(shell: BridgeShell, directory: @escaping @Sendable () -> BridgeHostDirectory,
+                localDirectory: String = FileManager.default.currentDirectoryPath,
+                onNewSession: (@Sendable (HostEntry, String) -> Void)? = nil) {
         self.shell = shell
         self.directory = directory
+        self.localDirectory = localDirectory
+        self.onNewSession = onNewSession
     }
 
     public var tools: [BridgeTool] {
-        [listHosts, readTerminal, trainingStatus, gpuStatus, listDirectory, readFile,
-         runCommand, sendToTerminal, writeFile]
+        [listHosts, readTerminal, trainingStatus, hostStatus, listDirectory, readFile, downloadFile,
+         runCommand, sendToTerminal, writeFile, editFile, uploadFile]
     }
 
     // MARK: - Schema helpers
@@ -30,7 +39,7 @@ public struct BridgeToolbox: Sendable {
     static func boolean(_ description: String) -> JSONValue { ["type": "boolean", "description": .string(description)] }
 
     static let hostProperty = string("Host id or name from list_hosts. Omit for the host of the tab the user has focused in LiteMux.")
-    static let sessionProperty = string("tmux session, e.g. \"lm_1\" (or just \"1\"). Omit for the LiteMux pane with the most recent activity.")
+    static let sessionProperty = string("tmux session: a LiteMux pane such as \"lm_1\" (or just \"1\"), or any other session on the host such as \"train\". Omit for the LiteMux pane with the most recent activity.")
 
     // MARK: - Shared plumbing
 
@@ -132,7 +141,7 @@ public struct BridgeToolbox: Sendable {
                 if host.id == dir.focusedHostID { line += " · ← LiteMux 当前标签页" }
                 lines.append(line)
                 if let sessions {
-                    let s = Self.describeSessions(sessions, openSlots: dir.openSlots[host.id] ?? [])
+                    let s = Self.describeSessions(sessions, openSlots: dir.openSlots[host.id] ?? [], isLocal: host.isLocal)
                     if !s.isEmpty { lines.append(contentsOf: s.map { "    " + $0 }) }
                 }
             }
@@ -141,13 +150,13 @@ public struct BridgeToolbox: Sendable {
     }
 
     /// `lm_1  python · /root/yolo · 2 分钟前 · LiteMux 窗格`
-    static func describeSessions(_ output: String, openSlots: [Int]) -> [String] {
+    static func describeSessions(_ output: String, openSlots: [Int], isLocal: Bool = false) -> [String] {
         var now: Double?
         var rows: [String] = []
         for raw in output.split(separator: "\n") {
             let line = String(raw)
             if line.hasPrefix("@@now ") { now = Double(line.dropFirst(6)); continue }
-            if line.hasPrefix(BridgeScripts.noTmux) { return ["tmux: 未安装"] }
+            if line.hasPrefix(BridgeScripts.noTmux) { return isLocal ? [] : ["tmux: 未安装"] }
             let f = line.components(separatedBy: "\t")
             guard f.count >= 5 else { continue }
             var parts = [f[0]]
@@ -187,35 +196,48 @@ public struct BridgeToolbox: Sendable {
     var trainingStatus: BridgeTool {
         BridgeTool(
             name: "training_status", title: "训练进度",
-            description: "Summarise a training run from a terminal pane's log: status (running/finished/crashed/diverged), epoch progress, latest/best values and trend of each metric (loss, val_loss, mAP, acc, lr …), a downsampled curve of the main loss, and the previous run for comparison. Understands PyTorch/Lightning/Keras/HF/Ultralytics/mmdet-style logs. Parsing happens in LiteMux; nothing is installed on the server.",
+            description: "Summarise a training run from a terminal pane's output, or from a log file with log_path (e.g. a nohup.out or train.log): status (running/finished/crashed/diverged), epoch progress, latest/best values and trend of each metric (loss, val_loss, mAP, acc, lr …), a downsampled curve of the main loss, and the previous run for comparison. Understands PyTorch/Lightning/Keras/HF/Ultralytics/mmdet-style logs. Parsing happens in LiteMux; nothing is installed on the server.",
             access: .read,
             inputSchema: Self.schema(["host": Self.hostProperty, "session": Self.sessionProperty,
+                                      "log_path": Self.string("Read this log file on the host instead of a terminal pane; may start with ~."),
                                       "lines": Self.integer("How much history to scan (default 4000 lines).", min: 50, max: 20000)])
         ) { call in
             let host = try resolveHost(call)
-            let session = try BridgeScripts.sessionName(call.string("session"))
             let lines = call.int("lines", default: 4000, range: 50...20000)
-            let r = try await run(BridgeScripts.capture(session: session, lines: lines), on: host, limit: 4_000_000)
-            let (name, body) = try Self.sessionOutput(r, host: host, requested: session)
+            let name: String
+            let body: String
+            if let logPath = call.string("log_path") {
+                let r = try await run(BridgeScripts.readFile(logPath, maxBytes: 4_000_000, tailLines: lines), on: host, limit: 4_100_000)
+                guard r.status == 0 else { throw BridgeToolError(r.err.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                name = logPath
+                body = r.out.components(separatedBy: BridgeScripts.dataMarker + "\n").dropFirst().joined(separator: "")
+            } else {
+                let session = try BridgeScripts.sessionName(call.string("session"))
+                let r = try await run(BridgeScripts.capture(session: session, lines: lines), on: host, limit: 4_000_000)
+                let out = try Self.sessionOutput(r, host: host, requested: session)
+                name = "tmux " + out.session
+                body = out.body
+            }
             let tracker = TrainingTracker()
-            _ = tracker.ingest(lines: body.components(separatedBy: "\n"))
+            // Log files keep tqdm's carriage-return updates; each is a line of its own.
+            _ = tracker.ingest(lines: body.components(separatedBy: CharacterSet(charactersIn: "\r\n")))
             guard let run = tracker.current else {
                 call.summary = "\(name) · 未识别"
-                return BridgeToolResult("\(host.title) · tmux \(name)：最近 \(lines) 行里没有认出训练日志（epoch / loss / acc 之类）。可以用 read_terminal 直接看输出。")
+                return BridgeToolResult("\(host.title) · \(name)：最近 \(lines) 行里没有认出训练日志（epoch / loss / acc 之类）。可以用 read_terminal 或 read_file 直接看输出。")
             }
             call.summary = "\(name) · " + TrainingSummary.headline(run)
-            return BridgeToolResult("\(host.title) · tmux \(name)\n" + TrainingSummary.text(run: run, previous: tracker.previous))
+            return BridgeToolResult("\(host.title) · \(name)\n" + TrainingSummary.text(run: run, previous: tracker.previous))
         }
     }
 
-    var gpuStatus: BridgeTool {
+    var hostStatus: BridgeTool {
         BridgeTool(
-            name: "gpu_status", title: "GPU 与资源",
-            description: "GPU utilisation, memory, temperature and power per card (nvidia-smi), the processes holding GPU memory, plus load average, RAM and free disk in $HOME. Use it to check whether a GPU is free before starting a job or why training is slow.",
-            access: .read, inputSchema: Self.schema(["host": Self.hostProperty])
+            name: "host_status", title: "主机状态",
+            description: "One look at a host: GPU utilisation, memory, temperature and power per card (nvidia-smi) and the processes holding GPU memory; load, RAM and the busiest processes; free space on every real mount (e.g. /root/autodl-tmp); listening TCP ports with their programs (TensorBoard, Jupyter, web consoles); failed systemd units; running Docker containers. Use it before starting a job, when training is slow, or to find which port a service listens on.",
+            access: .read, inputSchema: Self.schema(["host": Self.hostProperty]), aliases: ["gpu_status"]
         ) { call in
             let host = try resolveHost(call)
-            let r = try await run(BridgeScripts.gpu, on: host)
+            let r = try await run(BridgeScripts.hostStatus, on: host)
             let report = GPUReport.parse(r.out)
             call.summary = report.gpus.isEmpty ? "无 GPU" : "\(report.gpus.count) 张 GPU"
             return BridgeToolResult("\(host.title)\n" + report.text)
@@ -242,10 +264,12 @@ public struct BridgeToolbox: Sendable {
     var readFile: BridgeTool {
         BridgeTool(
             name: "read_file", title: "读取文件",
-            description: "Read a text file on the host: configs, scripts, logs, CSV results. Use tail_lines for the end of a long log. Binary files are refused.",
+            description: "Read a text file on the host: configs, scripts, logs, CSV results. Use start_line/end_line for a part of a long file (e.g. before edit_file) and tail_lines for the end of a log. Binary files are refused; fetch them with download_file.",
             access: .read,
             inputSchema: Self.schema(["host": Self.hostProperty,
                                       "path": Self.string("File path; may start with ~."),
+                                      "start_line": Self.integer("First line to return (1-based).", min: 1, max: 100_000_000),
+                                      "end_line": Self.integer("Last line to return (inclusive; default start_line + 499).", min: 1, max: 100_000_000),
                                       "tail_lines": Self.integer("Return only the last N lines.", min: 1, max: 20000),
                                       "max_bytes": Self.integer("Byte limit (default 200000).", min: 1, max: 2_000_000)],
                                      required: ["path"])
@@ -254,18 +278,34 @@ public struct BridgeToolbox: Sendable {
             guard let path = call.string("path") else { throw BridgeToolError("缺少 path。") }
             let maxBytes = call.int("max_bytes", default: 200_000, range: 1...2_000_000)
             let tail = call.arguments["tail_lines"]?.intValue.map { min(20000, max(1, $0)) }
-            call.summary = path
-            let r = try await run(BridgeScripts.readFile(path, maxBytes: maxBytes, tailLines: tail), on: host, limit: maxBytes + 4096)
+            var range: ClosedRange<Int>?
+            let start = call.arguments["start_line"]?.intValue, end = call.arguments["end_line"]?.intValue
+            if start != nil || end != nil {
+                let a = max(1, start ?? 1)
+                let b = max(a, end ?? (a + 499))
+                range = a...b
+            }
+            call.summary = path + (range.map { " · 第 \($0.lowerBound)–\($0.upperBound) 行" } ?? "")
+            let r = try await run(BridgeScripts.readFile(path, maxBytes: maxBytes, tailLines: range == nil ? tail : nil, lines: range),
+                                  on: host, limit: maxBytes + 4096)
             guard r.status == 0 else { throw BridgeToolError(r.err.trimmingCharacters(in: .whitespacesAndNewlines)) }
             let marker = Data(("\n" + BridgeScripts.dataMarker + "\n").utf8)
-            guard let range = r.stdout.range(of: marker) else { throw BridgeToolError("读取 \(path) 失败。") }
-            let size = Int(String(decoding: r.stdout[..<range.lowerBound], as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-            let content = r.stdout[range.upperBound...]
+            guard let markerRange = r.stdout.range(of: marker) else { throw BridgeToolError("读取 \(path) 失败。") }
+            let counts = String(decoding: r.stdout[..<markerRange.lowerBound], as: UTF8.self)
+                .split(separator: " ").compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let size = counts.first ?? 0
+            let content = r.stdout[markerRange.upperBound...]
             if content.prefix(8192).contains(0) {
-                throw BridgeToolError("\(path) 是二进制文件（\(size) 字节），不能当文本读取。")
+                throw BridgeToolError("\(path) 是二进制文件（\(size) 字节），不能当文本读取。需要的话用 download_file 下载到本机。")
             }
             var header = "\(host.title):\(path) · \(size) 字节"
-            if let tail { header += " · 最后 \(tail) 行" } else if size > maxBytes { header += " · 只显示前 \(maxBytes) 字节" }
+            if let range {
+                let total = counts.count > 1 ? counts[1] : 0
+                let last = min(range.upperBound, max(total, range.lowerBound))
+                header += " · 第 \(range.lowerBound)–\(last) 行（共 \(total) 行）"
+                if range.lowerBound > total, total > 0 { header += " · 起始行超出文件末尾" }
+            } else if let tail { header += " · 最后 \(tail) 行" } else if size > maxBytes { header += " · 只显示前 \(maxBytes) 字节" }
+            if content.count >= maxBytes { header += " · 已截断到 \(maxBytes) 字节" }
             return BridgeToolResult(header + "\n────────\n" + String(decoding: content, as: UTF8.self))
         }
     }
@@ -307,31 +347,59 @@ public struct BridgeToolbox: Sendable {
     var sendToTerminal: BridgeTool {
         BridgeTool(
             name: "send_to_terminal", title: "向终端输入",
-            description: "Type text into a LiteMux terminal pane (tmux send-keys) and press Enter, e.g. to start or resume a training run where the user can watch it. Set interrupt to send Ctrl-C first. Returns the pane's last lines after a short wait. May require the user's approval in LiteMux.",
+            description: "Type text into a LiteMux terminal pane (tmux send-keys) and press Enter, e.g. to start or resume a training run where the user can watch it. Use session \"new\" to open a fresh pane (optionally in cwd) instead of borrowing a busy one. If the pane is running a program rather than sitting at a shell prompt, the call is refused and names the program: set interrupt to send Ctrl-C first, or allow_busy to type into that program on purpose (answering a prompt, pdb). Returns the pane's last lines after a short wait. May require the user's approval in LiteMux.",
             access: .exec,
-            inputSchema: Self.schema(["host": Self.hostProperty, "session": Self.sessionProperty,
+            inputSchema: Self.schema(["host": Self.hostProperty,
+                                      "session": Self.string("tmux session: \"lm_1\" (or \"1\"), another session name, or \"new\" for a fresh LiteMux pane. Omit for the LiteMux pane with the most recent activity."),
                                       "text": Self.string("Text to type. Leave empty to only interrupt or press Enter."),
                                       "enter": Self.boolean("Press Enter after the text (default true)."),
                                       "interrupt": Self.boolean("Send Ctrl-C before typing (default false)."),
+                                      "allow_busy": Self.boolean("Type even though a program (not a shell) is in the foreground (default false)."),
+                                      "cwd": Self.string("With session \"new\": start the pane in this directory; may start with ~."),
                                       "wait_seconds": Self.number("Seconds to wait before reading the pane back (default 1.5, max 10).")])
         ) { call in
             let host = try resolveHost(call)
-            let session = try BridgeScripts.sessionName(call.string("session"))
+            let isNew = call.string("session")?.lowercased() == "new"
+            var session: String?
+            if !isNew { session = try BridgeScripts.sessionName(call.string("session")) }
             let text = call.rawString("text") ?? ""
             let enter = call.bool("enter", default: true)
             let interrupt = call.bool("interrupt", default: false)
-            guard !text.isEmpty || enter || interrupt else { throw BridgeToolError("没有要发送的内容。") }
+            let allowBusy = call.bool("allow_busy", default: false)
+            guard !text.isEmpty || enter || interrupt || isNew else { throw BridgeToolError("没有要发送的内容。") }
             let wait = call.double("wait_seconds", default: 1.5, range: 0...10)
-            call.summary = (interrupt ? "⌃C " : "") + (text.count > 160 ? String(text.prefix(160)) + "…" : text)
-            let target = session ?? "最近活跃的 LiteMux 窗格"
+            call.summary = (isNew ? "新窗格 " : "") + (interrupt ? "⌃C " : "") + (text.count > 160 ? String(text.prefix(160)) + "…" : text)
+
+            // Look at the pane first: typing into a running program is rarely what was meant.
+            if !isNew {
+                let r = try await run(BridgeScripts.paneCommand(session: session), on: host, timeout: 10)
+                let (name, body) = try Self.sessionOutput(r, host: host, requested: session)
+                session = name
+                let command = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                let isShell = command.isEmpty || BridgeScripts.shells.contains(command.trimmingCharacters(in: CharacterSet(charactersIn: "-")))
+                if !isShell, !interrupt, !allowBusy, !text.isEmpty {
+                    call.summary = "\(name) · 忙碌（\(command)）"
+                    return BridgeToolResult("""
+                    没有发送：\(host.title) 的 tmux \(name) 前台正在运行 \(command)，不是 shell 提示符，输入会被 \(command) 当成它自己的输入。
+                    可以：用 session:"new" 开一个新窗格来跑；或设 interrupt:true 先 Ctrl-C 停掉它；或者确实要回答它的提问（y/n、pdb 等）时设 allow_busy:true。先用 read_terminal 看看它在干什么。
+                    """, isError: true)
+                }
+            }
+
+            let target = isNew ? "新窗格" + (call.string("cwd").map { "（\($0)）" } ?? "") : "tmux \(session ?? "")"
             try await call.authorize(action: "向终端 \(target) 输入",
-                                     detail: (interrupt ? "⌃C（先中断当前程序）\n" : "") + text + (enter ? "  ⏎" : ""))
-            let r = try await run(BridgeScripts.send(session: session, text: text, enter: enter, interrupt: interrupt,
-                                                     settle: wait, tail: 40), on: host, timeout: 20 + wait)
+                                     detail: (interrupt ? "⌃C（先中断当前程序）\n" : "") + text + (enter && !text.isEmpty ? "  ⏎" : ""))
+            let prelude = isNew ? BridgeScripts.newSession(directory: call.string("cwd"), avoiding: directory().openSlots[host.id] ?? []) : nil
+            let r = try await run(BridgeScripts.send(session: session, text: text, enter: enter && (!text.isEmpty || !isNew),
+                                                     interrupt: interrupt && !isNew, settle: wait, tail: 40, prelude: prelude),
+                                  on: host, timeout: 20 + wait)
+            if isNew, r.status == 2 { throw BridgeToolError("开新窗格失败：" + r.err.trimmingCharacters(in: .whitespacesAndNewlines)) }
             let (name, body) = try Self.sessionOutput(r, host: host, requested: session)
             call.summary = "\(name) · " + call.summary
+            if isNew { onNewSession?(host, name) }
             let screen = body.components(separatedBy: BridgeScripts.dataMarker + "\n").last ?? body
-            return BridgeToolResult("已发送到 \(host.title) · tmux \(name)。窗格最后几行：\n────────\n" + Self.trimTrailingBlankLines(screen))
+            let lead = isNew ? "已在 \(host.title) 开了新窗格 tmux \(name)" + (onNewSession != nil ? "（LiteMux 开着的话会把它显示成一个标签页）" : "") + "。" : "已发送到 \(host.title) · tmux \(name)。"
+            return BridgeToolResult(lead + "窗格最后几行：\n────────\n" + Self.trimTrailingBlankLines(screen))
         }
     }
 
@@ -488,6 +556,14 @@ public struct GPUReport: Equatable, Sendable {
     public var cpus: Int?
     public var memory: String?
     public var disk: String?
+    /// `df -Ph` rows of every real mount (host_status only).
+    public var mounts: [String] = []
+    /// `pid pcpu pmem etime comm` of the busiest processes.
+    public var top: [String] = []
+    public var portLines: [String] = []
+    public var failedUnits: [String] = []
+    public var containers: [String] = []
+    public var ports: [ListeningPort] { ListeningPort.parse(portLines.joined(separator: "\n")) }
 
     public static func parse(_ output: String) -> GPUReport {
         var report = GPUReport()
@@ -516,6 +592,11 @@ public struct GPUReport: Equatable, Sendable {
             case "cpus": report.cpus = Int(line)
             case "mem": report.memory = line
             case "disk": report.disk = line
+            case "mounts": report.mounts.append(line)
+            case "top": report.top.append(line)
+            case "ports": report.portLines.append(line)
+            case "failed": report.failedUnits.append(line)
+            case "docker": report.containers.append(raw)
             default: break
             }
         }
@@ -555,9 +636,47 @@ public struct GPUReport: Equatable, Sendable {
                 lines.append("内存：" + memory)
             }
         }
-        if let disk {
+        if !top.isEmpty {
+            lines.append("最忙的进程（pid · CPU% · 内存% · 运行时长 · 程序）：")
+            for row in top {
+                let f = row.split(separator: " ")
+                lines.append("  " + (f.count >= 5 ? "\(f[0]) · \(f[1])% · \(f[2])% · \(f[3]) · \(f[4...].joined(separator: " "))" : row))
+            }
+        }
+        if !mounts.isEmpty {
+            lines.append("磁盘：")
+            var seen: Set<String> = []
+            for row in mounts {
+                let f = row.split(separator: " ")
+                guard f.count >= 6 else { continue }
+                let mount = f[5...].joined(separator: " ")
+                guard seen.insert(mount).inserted else { continue }
+                var line = "  \(mount) · 可用 \(f[3]) / \(f[1])（已用 \(f[4])）"
+                if let pct = Int(f[4].dropLast()), pct >= 90 { line += " ⚠️ 快满了" }
+                lines.append(line)
+            }
+        } else if let disk {
             let f = disk.split(separator: " ")
             lines.append(f.count >= 6 ? "磁盘（\(f[5])）：可用 \(f[3]) / \(f[1])" : "磁盘：" + disk)
+        }
+        let ports = self.ports
+        if !ports.isEmpty {
+            lines.append("监听端口：")
+            for p in ports {
+                var line = "  \(p.port) · \(p.label)"
+                if let proc = p.process, proc.lowercased() != p.label.lowercased() { line += "（\(proc)" + (p.pid.map { " pid \($0)" } ?? "") + "）" }
+                else if let pid = p.pid { line += "（pid \(pid)）" }
+                line += p.isLoopbackOnly ? " · 仅本机" : " · " + p.addresses.joined(separator: ", ")
+                lines.append(line)
+            }
+        }
+        if !failedUnits.isEmpty {
+            lines.append("失败的 systemd 服务：")
+            lines += failedUnits.map { "  " + $0 }
+        }
+        if !containers.isEmpty {
+            lines.append("Docker 容器：")
+            lines += containers.map { "  " + $0.replacingOccurrences(of: "\t", with: " · ") }
         }
         return lines.joined(separator: "\n")
     }

@@ -25,7 +25,10 @@ enum BridgeMain {
             if host.hasSavedPassword { extra = Askpass.environment(account: host.id) }
             return ProcessRunner.baseEnvironment(extra: extra)
         }
-        let toolbox = BridgeToolbox(shell: shell, directory: { BridgeHostDirectory.load() })
+        let toolbox = BridgeToolbox(shell: shell, directory: { BridgeHostDirectory.load() }) { host, session in
+            // A running LiteMux shows the agent's new pane as a tab (see AppModel).
+            BridgeNotice.postNewSession(hostID: host.id, session: session)
+        }
         let server = MCPServer(tools: toolbox.tools,
                                mode: { BridgeConfig.load().mode },
                                confirm: { request in await BridgeConfirmDialog.ask(request) },
@@ -86,7 +89,7 @@ enum BridgeConfirmDialog {
         // Return must never approve: the dialog can pop up while the user is typing.
         allow.keyEquivalent = ""
         deny.keyEquivalent = "\u{1b}"
-        alert.accessoryView = detailView(request.detail)
+        alert.accessoryView = detailView(request.detail, diff: request.isDiff)
         alert.window.level = .floating
         alert.window.collectionBehavior.insert(.canJoinAllSpaces)
 
@@ -107,11 +110,11 @@ enum BridgeConfirmDialog {
         }
     }
 
-    private static func detailView(_ text: String) -> NSView {
-        let width: CGFloat = 440
+    private static func detailView(_ text: String, diff: Bool) -> NSView {
         let font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-        let lines = max(1, min(12, text.components(separatedBy: "\n").count))
-        let height = min(190, CGFloat(lines) * 16 + 14)
+        let width: CGFloat = diff ? 560 : 440
+        let lines = max(1, min(diff ? 22 : 12, text.components(separatedBy: "\n").count))
+        let height = min(diff ? 340 : 190, CGFloat(lines) * 16 + 14)
 
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: width, height: height))
         scroll.hasVerticalScroller = true
@@ -122,8 +125,12 @@ enum BridgeConfirmDialog {
         scroll.layer?.backgroundColor = NSColor.textColor.withAlphaComponent(0.06).cgColor
 
         let view = NSTextView(frame: scroll.bounds)
-        view.string = text
-        view.font = font
+        if diff {
+            view.textStorage?.setAttributedString(diffText(text, font: font))
+        } else {
+            view.string = text
+            view.font = font
+        }
         view.isEditable = false
         view.isSelectable = true
         view.drawsBackground = false
@@ -133,5 +140,39 @@ enum BridgeConfirmDialog {
         view.textContainer?.widthTracksTextView = true
         scroll.documentView = view
         return scroll
+    }
+
+    static func adaptive(light: NSColor, dark: NSColor) -> NSColor {
+        NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light }
+    }
+
+    /// "- " lines on red, "+ " lines on green, hunk headers dimmed.
+    static func diffText(_ text: String, font: NSFont) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        let lines = text.components(separatedBy: "\n")
+        for (i, line) in lines.enumerated() {
+            var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+            if line.hasPrefix("+ ") {
+                attrs[.backgroundColor] = NSColor.systemGreen.withAlphaComponent(0.18)
+                attrs[.foregroundColor] = adaptive(light: NSColor(calibratedRed: 0.05, green: 0.38, blue: 0.12, alpha: 1), dark: NSColor(calibratedRed: 0.6, green: 0.92, blue: 0.62, alpha: 1))
+            } else if line.hasPrefix("- ") {
+                attrs[.backgroundColor] = NSColor.systemRed.withAlphaComponent(0.16)
+                attrs[.foregroundColor] = adaptive(light: NSColor(calibratedRed: 0.55, green: 0.08, blue: 0.08, alpha: 1), dark: NSColor(calibratedRed: 1, green: 0.66, blue: 0.64, alpha: 1))
+            } else if line.hasPrefix("@@") || line.hasPrefix("────") {
+                attrs[.foregroundColor] = NSColor.secondaryLabelColor
+            }
+            out.append(NSAttributedString(string: line + (i < lines.count - 1 ? "\n" : ""), attributes: attrs))
+        }
+        return out
+    }
+}
+
+/// Bridge → app messages over the distributed notification center (same user only).
+enum BridgeNotice {
+    static let newSession = Notification.Name("app.litemux.bridge.newSession")
+
+    static func postNewSession(hostID: String, session: String) {
+        DistributedNotificationCenter.default().postNotificationName(
+            newSession, object: nil, userInfo: ["host": hostID, "session": session], deliverImmediately: true)
     }
 }

@@ -65,18 +65,19 @@ public struct SSHInvocation: Sendable {
     // MARK: - Terminal panes
 
     /// Interactive terminal: `ssh -t … dest -- sh -c '<launcher>'`.
-    public func terminalArguments(endpoint: SSHEndpoint, slot: Int?, directory: String?, usesAskpass: Bool) -> [String] {
+    public func terminalArguments(endpoint: SSHEndpoint, slot: Int?, directory: String?, usesAskpass: Bool,
+                                  session: String? = nil) -> [String] {
         var args = ["-t"] + multiplexOptions
         if usesAskpass { args += Self.askpassOptions }
         args += endpoint.arguments(home: home)
-        args.append(Self.remoteLauncher(slot: slot, directory: directory))
+        args.append(Self.remoteLauncher(slot: slot, directory: directory, session: session))
         return args
     }
 
     /// The remote command for a pane. With a slot it attaches to (or creates)
     /// the private `lm_<slot>` tmux session, falling back to the login shell
     /// silently when tmux is missing. It never touches global tmux options.
-    public static func remoteLauncher(slot: Int?, directory: String?) -> String {
+    public static func remoteLauncher(slot: Int?, directory: String?, session: String? = nil) -> String {
         var script = ""
         if let directory, !directory.isEmpty {
             let dir: String
@@ -89,7 +90,11 @@ public struct SSHInvocation: Sendable {
             }
             script += "cd \(dir) 2>/dev/null; "
         }
-        if let slot {
+        if let session, !session.isEmpty {
+            // Someone else's session: attach as it is, never create or rename it.
+            let s = ShellWords.quote(session)
+            script += "if command -v tmux >/dev/null 2>&1 && tmux has-session -t =\(s) 2>/dev/null; then exec tmux attach-session -t =\(s); fi; "
+        } else if let slot {
             let session = sessionName(slot: slot)
             script += "if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s \(session); fi; "
         }

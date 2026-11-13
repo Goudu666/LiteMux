@@ -59,15 +59,23 @@ Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `c
 | 工具 | 作用 | 权限 |
 | --- | --- | --- |
 | `list_hosts` | 书签、`~/.ssh/config`、本机；是否已连接，每台机器上的 tmux 会话 | 读 |
-| `read_terminal` | 读某个窗格（tmux `lm_<n>`）最近的输出 | 读 |
-| `training_status` | 从窗格日志里解析训练状态、epoch 进度、各指标最新 / 最佳 / 趋势、loss 曲线和上一次运行 | 读 |
-| `gpu_status` | 每张卡的利用率、显存、温度、功耗和占显存的进程，外加负载、内存、磁盘 | 读 |
-| `list_directory` / `read_file` | 列目录、读文本文件（可只读日志末尾 N 行，二进制拒绝） | 读 |
+| `read_terminal` | 读某个窗格（`lm_<n>`，或你自己起的 `train` 之类会话）最近的输出 | 读 |
+| `training_status` | 从窗格或日志文件（`log_path`）解析训练状态、epoch 进度、各指标最新 / 最佳 / 趋势、loss 曲线和上一次运行 | 读 |
+| `host_status` | GPU（利用率、显存、占用进程）、负载和最忙的进程、每个挂载点的剩余空间、监听端口、失败的 systemd 服务、Docker 容器（旧名 `gpu_status` 仍可用） | 读 |
+| `list_directory` / `read_file` | 列目录、读文本文件（可按行范围或只读末尾 N 行，二进制拒绝） | 读 |
+| `download_file` | 把文件或整个文件夹原样拉到 Agent 所在的本机（文件夹走一条 tar 流） | 读 |
 | `run_command` | 跑一条短命令（`bash -lc`），返回退出码和输出 | 确认 |
-| `send_to_terminal` | 往窗格里输入一行（可先 Ctrl-C），适合启动或重启训练 | 确认 |
-| `write_file` | 写入或追加文本文件 | 确认 |
+| `send_to_terminal` | 往窗格里输入一行（可先 Ctrl-C）；前台不是 shell 时拒绝并说明在跑什么；`session:"new"` 开一个新窗格 | 确认 |
+| `edit_file` | 精确替换一段文本（必须唯一匹配），原地写入保留权限，写前确认文件没被别人改过；审批框里是红绿 diff | 确认 |
+| `write_file` / `upload_file` | 写入文本文件；把本机文件或文件夹原样传上去 | 确认 |
 
-三种模式存在 `~/.config/litemux/bridge.json`：**只读**（不提供后三个工具）、**执行前确认**（默认，每次弹窗；回车不会误点允许）、**完全信任**。所有调用都记在 `~/.config/litemux/bridge-activity.jsonl`。
+三种模式存在 `~/.config/litemux/bridge.json`：**只读**（只保留读类工具）、**执行前确认**（默认，每次弹窗；回车不会误点允许）、**完全信任**。所有调用都记在 `~/.config/litemux/bridge-activity.jsonl`。
+
+`LiteMux --mcp` 不需要 LiteMux 开着：它直接读 `state.json`，有现成的 SSH 隧道就复用，没有就用密钥直连，保存过密码的书签走钥匙串。只有要验证码的机器，才需要先在 LiteMux 里开一次终端。
+
+## 端口转发与 tmux 会话
+
+点状态栏左下角的主机名，弹出这台机器的端口和 tmux 会话：TensorBoard、Jupyter、Gradio 这类正在监听的端口一键「转发并打开」（`ssh -O forward` 复用现有隧道，不用重新登录），也能手填端口；你自己起的 `train`、`bot` 之类 tmux 会话可以直接「接管」到一个标签页，不会套进 `lm_` 会话里。
 
 ## 快捷键
 

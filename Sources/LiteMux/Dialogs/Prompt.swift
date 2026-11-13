@@ -57,6 +57,25 @@ enum Prompt {
         }
     }
 
+    enum ConflictChoice { case reload, overwrite, cancel }
+
+    /// The file changed on the server after it was opened.
+    static func saveConflict(fileName: String, detail: String) -> ConflictChoice {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "「\(fileName)」在服务器上被改过了"
+        alert.informativeText = "打开之后有人（或别的程序）修改了它\(detail)。\n重新加载会丢掉你在这里的修改；强制覆盖会丢掉服务器上的那次修改。"
+        alert.addButton(withTitle: "重新加载")
+        let overwrite = alert.addButton(withTitle: "强制覆盖")
+        overwrite.hasDestructiveAction = true
+        alert.addButton(withTitle: "取消")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: return .reload
+        case .alertSecondButtonReturn: return .overwrite
+        default: return .cancel
+        }
+    }
+
     /// Shown when a file is too large or binary for the editor.
     static func offerDownload(title: String, message: String) -> Bool {
         let alert = NSAlert()

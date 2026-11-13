@@ -22,6 +22,13 @@ private final class FakeShell: BridgeShell, @unchecked Sendable {
     var scripts: [String] { lock.lock(); defer { lock.unlock() }; return ran.map(\.script) }
 }
 
+private final class OpenedSessions: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String] = []
+    func add(_ s: String) { lock.withLock { items.append(s) } }
+    var all: [String] { lock.withLock { items } }
+}
+
 private final class ConfirmRecorder: @unchecked Sendable {
     var asked: [BridgeConfirmation] = []
     var answer: BridgeDecision = .allowOnce
@@ -132,6 +139,7 @@ final class BridgeServerTests: XCTestCase {
         _ = try await tool(server, "run_command", ["command": "echo again"])
         XCTAssertEqual(recorder.asked.count, 2)
         // …but another tool still asks.
+        shell.reply("display-message", "@@lm-session lm_1\nzsh\n")
         _ = try await tool(server, "send_to_terminal", ["text": "python train.py"])
         XCTAssertEqual(recorder.asked.count, 3)
         XCTAssertTrue(recorder.asked[2].action.contains("向终端"))
@@ -196,6 +204,93 @@ final class BridgeServerTests: XCTestCase {
         XCTAssertTrue(r.isError)
         XCTAssertTrue(r.text.contains("连不上 gpu"))
         XCTAssertTrue(r.text.contains("Connection refused"))
+    }
+
+    func testSendToTerminalGuardsBusyPanes() async throws {
+        let shell = FakeShell()
+        shell.reply("display-message", "@@lm-session train\npython3\n")
+        let recorder = ConfirmRecorder()
+        let server = makeServer(shell, recorder: recorder)
+        let busy = try await tool(server, "send_to_terminal", ["session": "train", "text": "ls"])
+        XCTAssertTrue(busy.isError)
+        XCTAssertTrue(busy.text.contains("python3") && busy.text.contains("session:\"new\""), busy.text)
+        XCTAssertTrue(recorder.asked.isEmpty, "a refused send never asks the user")
+        XCTAssertFalse(shell.scripts.contains { $0.contains("send-keys") })
+
+        shell.reply("send-keys", "@@lm-session train\n@@lm-data\n>>> \n")
+        let forced = try await tool(server, "send_to_terminal", ["session": "train", "text": "y", "allow_busy": true])
+        XCTAssertFalse(forced.isError, forced.text)
+        XCTAssertEqual(recorder.asked.last?.action, "向终端 tmux train 输入")
+    }
+
+    func testSendToTerminalOpensANewPane() async throws {
+        let shell = FakeShell()
+        shell.reply("new-session -d", "@@lm-session lm_2\n@@lm-data\n$ echo hi\nhi\n")
+        let opened = OpenedSessions()
+        let gpu = gpuHost
+        let toolbox = BridgeToolbox(shell: shell, directory: {
+            BridgeHostDirectory(hosts: [gpu, .local], openSlots: [gpu.id: [1]], focusedHostID: gpu.id)
+        }, onNewSession: { host, name in opened.add(host.id + "|" + name) })
+        let server = MCPServer(tools: toolbox.tools, mode: { .trusted }, confirm: { _ in .allowOnce })
+        let r = try await tool(server, "send_to_terminal", ["session": "new", "cwd": "~/exp", "text": "echo hi"])
+        XCTAssertFalse(r.isError, r.text)
+        XCTAssertTrue(r.text.contains("新窗格 tmux lm_2"), r.text)
+        XCTAssertEqual(opened.all, ["config:gpu|lm_2"])
+        let script = try XCTUnwrap(shell.scripts.last)
+        XCTAssertTrue(script.contains("case \" 1 \" in"), "skips slots open in LiteMux")
+        XCTAssertTrue(script.contains("-c \"$D\"") && script.contains("D=\"$HOME\"/exp"))
+        XCTAssertFalse(shell.scripts.contains { $0.contains("display-message") }, "a new pane needs no busy check")
+    }
+
+    func testHostStatusAndAlias() async throws {
+        let shell = FakeShell()
+        shell.reply("## mounts", """
+        ## gpu
+        none
+        ## load
+         load average: 0.10, 0.20, 0.30
+        ## mounts
+        overlay 30G 12G 18G 40% /
+        /dev/vdb 200G 190G 10G 95% /root/autodl-tmp
+        ## ports
+        ss LISTEN 0 4096 127.0.0.1:6006 0.0.0.0:* users:(("tensorboard",pid=812,fd=3))
+        ss LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=1,fd=3))
+        ## docker
+        web\tUp 2 hours\tnginx:1.27
+        """)
+        let server = makeServer(shell)
+        let r = try await tool(server, "host_status")
+        XCTAssertFalse(r.isError, r.text)
+        XCTAssertTrue(r.text.contains("/root/autodl-tmp · 可用 10G / 200G（已用 95%） ⚠️ 快满了"), r.text)
+        XCTAssertTrue(r.text.contains("6006 · TensorBoard（pid 812） · 仅本机"), r.text)
+        XCTAssertTrue(r.text.contains("22 · SSH"), r.text)
+        XCTAssertTrue(r.text.contains("web · Up 2 hours · nginx:1.27"), r.text)
+        let alias = try await tool(server, "gpu_status")
+        XCTAssertFalse(alias.isError, alias.text)
+        XCTAssertTrue(alias.text.contains("快满了"))
+    }
+
+    func testEditFilePlansDiffsAndAsks() async throws {
+        let shell = FakeShell()
+        shell.reply("cksum < \"$P\"\necho @@lm-data", "1234 40\n@@lm-data\nseed: 1\nlr: 0.1\nepochs: 10\n")
+        shell.reply("cat -- \"$N\"", "41\n")
+        let recorder = ConfirmRecorder()
+        let server = makeServer(shell, recorder: recorder)
+        let r = try await tool(server, "edit_file", ["path": "~/exp/cfg.yaml", "old_text": "lr: 0.1", "new_text": "lr: 0.01"])
+        XCTAssertFalse(r.isError, r.text)
+        XCTAssertEqual(recorder.asked.count, 1)
+        XCTAssertTrue(recorder.asked[0].isDiff)
+        XCTAssertTrue(recorder.asked[0].detail.contains("- lr: 0.1\n+ lr: 0.01"), recorder.asked[0].detail)
+        let commit = try XCTUnwrap(shell.scripts.last)
+        XCTAssertTrue(commit.contains("'1234 40'"), "only writes over the version it read")
+        let staged = try XCTUnwrap(shell.scripts.first { $0.contains("cfg.yaml.lm-edit") && $0.contains("base64") })
+        XCTAssertTrue(staged.contains(Data("seed: 1\nlr: 0.01\nepochs: 10\n".utf8).base64EncodedString()))
+
+        shell.replies.removeAll { $0.needle.hasPrefix("cat -- ") }
+        shell.reply("cat -- \"$N\"", "@@lm-changed\n", status: 9)
+        let changed = try await tool(server, "edit_file", ["path": "~/exp/cfg.yaml", "old_text": "epochs: 10", "new_text": "epochs: 20"])
+        XCTAssertTrue(changed.isError)
+        XCTAssertTrue(changed.text.contains("被改过了"), changed.text)
     }
 
     func testTrainingStatusSummarisesTheLog() async throws {
@@ -414,5 +509,124 @@ final class BridgePartsTests: XCTestCase {
         XCTAssertTrue(args.contains("ControlPath=/Users/me/.ssh/lm/%C"))
         XCTAssertTrue(args.contains("BatchMode=yes"))
         XCTAssertEqual(Array(args.suffix(4)), ["-p", "2222", "root@gpu", "sh -c " + ShellWords.quote("echo 'hi'")])
+    }
+
+    func testEditPlan() throws {
+        let plan = try EditPlan.make(content: "a\nb\nc\nd\ne\nf\n", old: "c\nd\n", new: "C\n", replaceAll: false)
+        XCTAssertEqual(plan.result, "a\nb\nC\ne\nf\n")
+        XCTAssertEqual(plan.count, 1)
+        XCTAssertEqual(plan.diff, "@@ 第 3 行\n  a\n  b\n- c\n- d\n+ C\n  e\n  f")
+
+        let inline = try EditPlan.make(content: "x = foo(1)\n", old: "foo", new: "bar", replaceAll: false)
+        XCTAssertEqual(inline.diff, "@@ 第 1 行\n- x = foo(1)\n+ x = bar(1)\n  ")
+
+        XCTAssertThrowsError(try EditPlan.make(content: "lr\nlr\n", old: "lr", new: "x", replaceAll: false)) { e in
+            XCTAssertTrue("\(e)".contains("2 次") && "\(e)".contains("第 1 行、第 2 行"), "\(e)")
+        }
+        let all = try EditPlan.make(content: "lr\nlr\n", old: "lr", new: "x", replaceAll: true)
+        XCTAssertEqual(all.result, "x\nx\n")
+        XCTAssertEqual(all.count, 2)
+        XCTAssertThrowsError(try EditPlan.make(content: "  lr: 1\n", old: "lr: 1\n ", new: "x", replaceAll: false)) { e in
+            XCTAssertTrue("\(e)".contains("找不到") && "\(e)".contains("缩进"), "\(e)")
+        }
+    }
+
+    func testListeningPorts() {
+        let ports = ListeningPort.parse("""
+        ss LISTEN 0 4096 0.0.0.0:6006 0.0.0.0:* users:(("tensorboard",pid=812,fd=3))
+        ss LISTEN 0 4096 [::]:6006 [::]:* users:(("tensorboard",pid=812,fd=4))
+        ss LISTEN 0 128 127.0.0.53%lo:53 0.0.0.0:*
+        lsof Python 4242 me 3u IPv4 0xabc 0t0 TCP 127.0.0.1:7351 (LISTEN)
+        netstat tcp 0 0 0.0.0.0:8888 0.0.0.0:* LISTEN 99/jupyter-lab
+        """)
+        XCTAssertEqual(ports.map(\.port), [53, 6006, 7351, 8888])
+        XCTAssertEqual(ports[1].addresses, ["0.0.0.0", "[::]"])
+        XCTAssertEqual(ports[1].label, "TensorBoard")
+        XCTAssertFalse(ports[1].isLoopbackOnly)
+        XCTAssertEqual(ports[0].addresses, ["127.0.0.53"])
+        XCTAssertFalse(ports[0].looksLikeWeb)
+        XCTAssertEqual(ports[2].process, "Python")
+        XCTAssertEqual(ports[2].pid, 4242)
+        XCTAssertTrue(ports[2].isLoopbackOnly && ports[2].looksLikeWeb)
+        XCTAssertEqual(ports[3].label, "Jupyter")
+    }
+
+    func testGPUIdleDetector() {
+        func g(_ util: Double, _ mem: Double) -> [GPUReading] {
+            [GPUReading(index: 0, name: "A100", memoryUsedMiB: mem, memoryTotalMiB: 80_000, utilization: util)]
+        }
+        var d = GPUIdleDetector(idleAfter: 300, minimumBusy: 120)
+        let t0 = Date()
+        XCTAssertFalse(d.observe(g(0, 10), at: t0), "idle from the start is not news")
+        XCTAssertFalse(d.observe(g(0, 10), at: t0.addingTimeInterval(1000)))
+        XCTAssertFalse(d.observe(g(95, 60_000), at: t0.addingTimeInterval(1100)))
+        XCTAssertFalse(d.observe(g(90, 60_000), at: t0.addingTimeInterval(1400)))
+        XCTAssertFalse(d.observe(g(1, 100), at: t0.addingTimeInterval(1410)))
+        XCTAssertFalse(d.observe(g(1, 100), at: t0.addingTimeInterval(1600)))
+        XCTAssertTrue(d.observe(g(1, 100), at: t0.addingTimeInterval(1711)))
+        XCTAssertFalse(d.observe(g(1, 100), at: t0.addingTimeInterval(2500)), "only once")
+
+        var blip = GPUIdleDetector(idleAfter: 300, minimumBusy: 120)
+        XCTAssertFalse(blip.observe(g(99, 50_000), at: t0))
+        XCTAssertFalse(blip.observe(g(0, 0), at: t0.addingTimeInterval(10)))
+        XCTAssertFalse(blip.observe(g(0, 0), at: t0.addingTimeInterval(1000)), "a short blip is not a job")
+    }
+
+    func testLocalEditAndTransferScripts() async throws {
+        let shell = ProcessBridgeShell()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("run.sh")
+        try Data("#!/bin/sh\necho 1\n".utf8).write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0o750], ofItemAtPath: file.path)
+
+        let read = await shell.run(BridgeScripts.readForEdit(file.path), on: .local, stdin: nil, timeout: 10, outputLimit: 100_000)
+        XCTAssertEqual(read.status, 0, read.err)
+        let sum = String(read.out.split(separator: "\n")[0])
+        let staged = file.path + ".lm-edit"
+        _ = await shell.run(BridgeScripts.write(path: staged, chunk: Data("#!/bin/sh\necho 2\n".utf8), append: false),
+                            on: .local, stdin: nil, timeout: 10, outputLimit: 1000)
+        let stale = await shell.run(BridgeScripts.commitEdit(file.path, staged: staged, checksum: "0 0"),
+                                    on: .local, stdin: nil, timeout: 10, outputLimit: 1000)
+        XCTAssertEqual(stale.status, 9)
+        XCTAssertTrue(stale.out.hasPrefix(BridgeScripts.changedMarker))
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "#!/bin/sh\necho 1\n")
+
+        _ = await shell.run(BridgeScripts.write(path: staged, chunk: Data("#!/bin/sh\necho 2\n".utf8), append: false),
+                            on: .local, stdin: nil, timeout: 10, outputLimit: 1000)
+        let ok = await shell.run(BridgeScripts.commitEdit(file.path, staged: staged, checksum: sum),
+                                 on: .local, stdin: nil, timeout: 10, outputLimit: 1000)
+        XCTAssertEqual(ok.status, 0, ok.err)
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "#!/bin/sh\necho 2\n")
+        let mode = try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber
+        XCTAssertEqual(mode?.intValue, 0o750)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staged))
+
+        // Streams: stdin from a file and stdout into a file, byte for byte.
+        var bytes = Data((0..<70_000).map { UInt8(truncatingIfNeeded: $0 &* 31) })
+        bytes.append(contentsOf: [0, 13, 10, 0])
+        let src = dir.appendingPathComponent("blob.bin")
+        try bytes.write(to: src)
+        let remote = dir.appendingPathComponent("up/blob.bin").path
+        let up = await shell.stream(BridgeScripts.upload(remote, directory: false), on: .local, input: src, output: nil, timeout: 10)
+        XCTAssertEqual(up.status, 0, up.err)
+        XCTAssertEqual(up.out.trimmingCharacters(in: .whitespacesAndNewlines), String(bytes.count))
+        let back = dir.appendingPathComponent("back.bin")
+        let down = await shell.stream(BridgeScripts.download(remote, directory: false), on: .local, input: nil, output: back, timeout: 10)
+        XCTAssertEqual(down.status, 0, down.err)
+        XCTAssertEqual(try Data(contentsOf: back), bytes)
+    }
+
+    func testLaunchersForNamedSessions() {
+        let named = SSHInvocation.remoteLauncher(slot: nil, directory: nil, session: "train")
+        XCTAssertTrue(named.contains("attach-session -t =train"), named)
+        XCTAssertFalse(named.contains("new-session"), "never creates someone else's session")
+        XCTAssertEqual(PaneSpec(hostID: "h", slot: 2).tmuxSession, "lm_2")
+        XCTAssertEqual(PaneSpec(hostID: "h", slot: nil, session: "bot").tmuxSession, "bot")
+        let old = #"{"id":"6B0E4B7C-5B5C-4E43-9B57-2B6A4E0B9C11","hostID":"h","slot":1}"#
+        let decoded = try? JSONDecoder().decode(PaneSpec.self, from: Data(old.utf8))
+        XCTAssertEqual(decoded?.slot, 1)
+        XCTAssertNil(decoded?.session)
+        XCTAssertEqual(BridgeToolbox.describeSessions("@@lm-no-tmux\n", openSlots: [], isLocal: true), [])
     }
 }

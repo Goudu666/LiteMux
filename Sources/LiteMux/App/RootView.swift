@@ -26,7 +26,8 @@ struct RootView: View {
                     }
                 }
                 StatusBarView(monitor: model.monitor, transfers: model.transfers,
-                              training: model.focusedTraining, showPulse: $model.showPulsePanel)
+                              training: model.focusedTraining, showPulse: $model.showPulsePanel,
+                              model: model, showHostTools: $model.showHostTools)
             }
             .ignoresSafeArea()
         }

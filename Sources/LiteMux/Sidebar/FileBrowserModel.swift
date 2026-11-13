@@ -215,7 +215,11 @@ final class FileBrowserModel {
 
     func download(_ entry: FileEntry) {
         guard let host else { return }
-        app?.transfers.download(entry, from: host)
+        if entry.behavesAsDirectory {
+            app?.transfers.downloadFolder(entry, from: host)
+        } else {
+            app?.transfers.download(entry, from: host)
+        }
     }
 
     func upload(_ urls: [URL], to dir: String) {

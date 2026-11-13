@@ -38,12 +38,17 @@ enum TrainingNotifier {
             toast("\(place) · \(m.title)：\(m.body)", event == .finished ? .success : .error)
             return
         }
+        postSystem(title: "\(place) · \(m.title)", body: m.body)
+    }
+
+    /// A macOS notification (asks for permission the first time).
+    static func postSystem(title: String, body: String) {
         guard canNotify else { return }
         let center = UNUserNotificationCenter.current()
         let send = {
             let content = UNMutableNotificationContent()
-            content.title = "\(place) · \(m.title)"
-            content.body = m.body
+            content.title = title
+            content.body = body
             content.sound = .default
             center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }

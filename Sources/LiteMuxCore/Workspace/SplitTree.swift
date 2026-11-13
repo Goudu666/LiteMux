@@ -1,17 +1,27 @@
 import Foundation
 
-/// One terminal pane in a layout. `slot` names its private remote tmux session.
+/// One terminal pane in a layout. `slot` names its private remote tmux session;
+/// `session` instead attaches to a tmux session the user started themselves
+/// (e.g. `train`), directly rather than nested inside `lm_<n>`.
 public struct PaneSpec: Codable, Hashable, Sendable, Identifiable {
     public var id: UUID
     public var hostID: String
     public var slot: Int?
     public var directory: String?
+    public var session: String?
 
-    public init(id: UUID = UUID(), hostID: String, slot: Int?, directory: String? = nil) {
+    public init(id: UUID = UUID(), hostID: String, slot: Int?, directory: String? = nil, session: String? = nil) {
         self.id = id
         self.hostID = hostID
         self.slot = slot
         self.directory = directory
+        self.session = session
+    }
+
+    /// The tmux session this pane shows, if any.
+    public var tmuxSession: String? {
+        if let session, !session.isEmpty { return session }
+        return slot.map(SSHInvocation.sessionName(slot:))
     }
 }
 

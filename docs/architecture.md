@@ -69,6 +69,10 @@ sh -c 'cd <dir> 2>/dev/null; if command -v tmux >/dev/null 2>&1; then exec tmux 
 
 **LiteMux Bridge。** `LiteMux --mcp` 用同一个可执行文件启动一个 MCP server：不开窗口、不进 Dock，从 stdin 读一行 JSON-RPC、往 stdout 写一行回答，请求可以并发处理。协议和工具都在 `LiteMuxCore/Bridge`，和 AppKit 无关，测试直接喂字符串。每次调用都重新读取 `state.json` 和 `~/.ssh/config`，所以新加的书签、当前选中的标签页（「不指定主机」时默认用它）立即可见。远端命令走 `ssh -o ControlMaster=no -o ControlPath=~/.ssh/lm/%C`：有 LiteMux 终端打开的 master 就复用它，没有就用密钥直连，绝不在后台留下一个占着管道的 master。读窗格用 `tmux capture-pane -p -J`（软换行已合并），训练状态复用 Training Pulse 的解析器在本机计算。执行、按键、写文件三类工具在「执行前确认」模式下会弹一个浮动 NSAlert，显示 Agent 名字、主机和完整命令；「允许」没有回车快捷键，Esc 是拒绝，3 分钟没人理自动拒绝；「本次会话都允许」只对这个 Agent 进程里的同一工具、同一主机有效。LiteMux 不带模型、不联网，Bridge 只是把门打开。
 
+**文件与传输（v0.3）。** `edit_file` 先读回整份文件和它的 `cksum`，在本机做唯一匹配并生成 diff 给审批框；写入时内容分块 base64 进一个 `.lm-edit` 暂存文件，最后一条命令只有在 `cksum` 没变时才 `cat 暂存 > 原文件`，所以 inode、权限、属主都不动，别人中途改过就拒绝。`download_file` / `upload_file` 让 ssh 子进程的 stdout / stdin 直接接本机文件（`posix_spawn` 的 file actions），字节不经过内存也不经过 base64；文件夹用 `tar -czf -` 一条流传输。`send_to_terminal` 发送前先查 `#{pane_current_command}`，前台不是 shell 就拒绝；`session:"new"` 在服务器上建一个 LiteMux 没占用的 `lm_<n>`，并通过分布式通知让开着的 LiteMux 把它显示成标签页。
+
+**端口转发。** 状态栏主机名的弹层用同一套脚本列出 tmux 会话和监听端口（`ss -ltnp`，没有就 `lsof` / `netstat`），转发是 `ssh -O forward -L 127.0.0.1:本地:localhost:远端`，挂在终端已有的 master 上，不需要再登录，master 退出时一起消失。本地端口优先用同号，被占就往后找。
+
 ## 构建与体积
 
 App 没有内嵌任何框架：AppKit、SwiftUI、Security、Metal 都是系统自带的。SwiftTerm 静态链接进来，release 构建会用 `-Osize` 编译并 strip。CI 每次构建都会打印 `.app` 的体积。
