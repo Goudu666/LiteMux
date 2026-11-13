@@ -219,6 +219,16 @@ final class TrainingTrackerTests: XCTestCase {
         XCTAssertEqual(t.previous?.series(named: "loss")?.points.count, 60)
     }
 
+    func testOrphanTailAtTopOfScreenIsIgnored() throws {
+        let t = tracker()
+        let head = "Epoch  9/60  loss=1.0000  acc=0.5000  val_loss=1.1000 "
+        t.ingest(rows: [ScreenRow(text: " val_acc=0.1000  lr=9.9e-09"), ScreenRow(text: head),
+                        ScreenRow(text: " val_acc=0.6000  lr=2.0e-04")], cols: 54)
+        let run = try XCTUnwrap(t.current)
+        XCTAssertEqual(run.series(named: "lr")?.points.map(\.y), [2.0e-04])
+        XCTAssertEqual(run.series(named: "val_acc")?.points.map(\.x), [9])
+    }
+
     func testHuggingFaceFractionalEpochs() throws {
         let t = tracker()
         t.ingest(lines: ["{'loss': 0.9, 'learning_rate': 5e-05, 'epoch': 0.25}", "{'loss': 0.7, 'learning_rate': 4e-05, 'epoch': 0.5}"])

@@ -212,7 +212,10 @@ public final class TrainingTracker {
 
     @discardableResult
     public func ingest(rows: [ScreenRow], cols: Int) -> [TrainingEvent] {
-        ingest(lines: Self.logicalLines(rows, cols: cols))
+        // The top row may be the second half of a line whose start has scrolled
+        // away; read alone it would put an old value at the current epoch. Lines
+        // enter at the bottom, so it was already read whole on its way up.
+        ingest(lines: Array(Self.logicalLines(rows, cols: cols).dropFirst()))
     }
 
     @discardableResult
