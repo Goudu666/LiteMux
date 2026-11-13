@@ -183,6 +183,24 @@ jobs:
           kill $(cat app.pid) 2>/dev/null || true
           sleep 2
 
+      # The local coding-agent interface: drive `LiteMux --mcp` like Claude Code
+      # would, against the real sshd + tmux, while lm_1 is still training.
+      - name: LiteMux Bridge (MCP) end to end
+        run: |
+          python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 2>&1 | tee shots/bridge-e2e.txt
+          python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 --confirm-shot shots/bridge-confirm.png 2>&1 | tee -a shots/bridge-e2e.txt || true
+          tail -n 5 ~/.config/litemux/bridge-activity.jsonl || true
+
+      - name: Launch and capture (light, agent sheet)
+        run: |
+          LITEMUX_SMOKE_AGENTS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-agents.log 2>&1 &
+          echo $! > app.pid
+          sleep 12
+          screencapture -x shots/light-agents.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-agents.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
       - name: Launch and capture (light, mask preview)
         run: |
           python3 - <<'EOF'

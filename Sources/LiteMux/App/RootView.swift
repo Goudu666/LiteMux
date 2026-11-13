@@ -35,6 +35,9 @@ struct RootView: View {
         .sheet(item: $model.connectionSheet) { draft in
             NewConnectionSheet(model: model, draft: draft)
         }
+        .sheet(isPresented: $model.showAgentBridge) {
+            AgentBridgeSheet(model: model)
+        }
         .animation(.easeOut(duration: 0.18), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.toastItem)
         .tint(Theme.accentColor)

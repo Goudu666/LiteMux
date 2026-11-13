@@ -36,6 +36,7 @@ final class AppModel {
     var connectionSheet: ConnectionDraft?
     var toastItem: Toast?
     var showPulsePanel = false
+    var showAgentBridge = false
 
     // Services.
     let hub = ConnectionHub()
@@ -74,6 +75,10 @@ final class AppModel {
         if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PULSE"] == "1" {
             // CI screenshot of the Training Pulse panel.
             DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak self] in self?.showPulsePanel = true }
+        }
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_AGENTS"] == "1" {
+            // CI screenshot of the "接入 Coding Agent" sheet.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.showAgentBridge = true }
         }
         if let spec = ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PREVIEW"] {
             // CI screenshot of the mask preview: "<hostID>|<path>".

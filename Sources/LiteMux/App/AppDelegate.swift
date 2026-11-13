@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     // MARK: Menu actions
 
     @objc func newConnection(_ sender: Any?) { model.presentNewConnection() }
+    @objc func showAgentBridge(_ sender: Any?) { model.showAgentBridge = true }
     @objc func newTab(_ sender: Any?) { model.newTerminalTab() }
     @objc func newLocalTab(_ sender: Any?) { model.openTerminalTab(host: .local) }
     @objc func closeFocused(_ sender: Any?) { model.closeFocused() }
@@ -141,6 +142,8 @@ enum MainMenu {
         let appName = "LiteMux"
         _ = submenu(appName, [
             item("关于 \(appName)", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), "", [], chain: true),
+            .separator(),
+            item("接入 Coding Agent…", #selector(AppDelegate.showAgentBridge(_:)), "", []),
             .separator(),
             item("隐藏 \(appName)", #selector(NSApplication.hide(_:)), "h", chain: true),
             item("隐藏其他", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option], chain: true),
