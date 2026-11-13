@@ -1,0 +1,2 @@
+smoke: ssh -o ControlPath=/Users/runner/.ssh/lm/%C -O forward -L 127.0.0.1:6007:127.0.0.1:6006 lab1 → 0 
+smoke: forward 6007

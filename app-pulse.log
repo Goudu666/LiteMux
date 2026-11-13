@@ -1,0 +1,238 @@
+scan cols=54 rows=38
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [54] [lm_1] 0:tmux* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=0 epoch=-1.0 status=nil events=[]
+scan cols=42 rows=19
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [42] [lm_2] 12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=0 epoch=-1.0 status=nil events=[]
+scan cols=42 rows=19
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+pulse rev=0 epoch=-1.0 status=nil events=[]
+scan cols=54 rows=38
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=8 epoch=8.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[LiteMuxCore.TrainingEvent.started]
+scan cols=54 rows=38
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=16 epoch=16.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.7317  lr=2.1e-04
+    [54] Epoch 23/60  loss=0.8170  acc=0.7705  val_loss=0.9600 
+    [27w]  val_acc=0.7355  lr=2.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=23 epoch=23.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.8243  lr=1.4e-04
+    [54] Epoch 32/60  loss=0.5590  acc=0.8701  val_loss=0.6792 
+    [27w]  val_acc=0.8377  lr=1.3e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=32 epoch=32.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.8756  lr=8.2e-05
+    [54] Epoch 40/60  loss=0.4059  acc=0.9076  val_loss=0.5029 
+    [27w]  val_acc=0.8688  lr=7.5e-05
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=40 epoch=40.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.9191  lr=3.9e-05
+    [54] Epoch 47/60  loss=0.2955  acc=0.9391  val_loss=0.3850 
+    [27w]  val_acc=0.9183  lr=3.3e-05
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=47 epoch=47.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.9241  lr=5.1e-06
+    [54] Epoch 56/60  loss=0.2290  acc=0.9587  val_loss=0.3251 
+    [27w]  val_acc=0.9197  lr=3.3e-06
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=56 epoch=56.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.2399  lr=3.0e-04
+    [54w] Epoch  3/60  loss=1.8049  acc=0.3481  val_loss=2.0604 
+    [27w]  val_acc=0.3189  lr=3.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=63 epoch=3.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[LiteMuxCore.TrainingEvent.finished, LiteMuxCore.TrainingEvent.started]
+scan cols=54 rows=38
+    [27]  val_acc=0.3189  lr=3.0e-04
+    [54w] Epoch  4/60  loss=1.6644  acc=0.4272  val_loss=1.8680 
+    [27w]  val_acc=0.3897  lr=3.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=64 epoch=4.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.3897  lr=3.0e-04
+    [54w] Epoch  5/60  loss=1.5155  acc=0.4801  val_loss=1.7403 
+    [27w]  val_acc=0.4481  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=65 epoch=5.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.4481  lr=2.9e-04
+    [54w] Epoch  6/60  loss=1.3784  acc=0.5396  val_loss=1.5539 
+    [27w]  val_acc=0.5127  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=66 epoch=6.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.5127  lr=2.9e-04
+    [54w] Epoch  7/60  loss=1.2674  acc=0.5850  val_loss=1.4666 
+    [27w]  val_acc=0.5593  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=67 epoch=7.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.5593  lr=2.9e-04
+    [54w] Epoch  8/60  loss=1.1528  acc=0.6369  val_loss=1.3252 
+    [27w]  val_acc=0.6134  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=68 epoch=8.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6134  lr=2.9e-04
+    [54w] Epoch  9/60  loss=1.1018  acc=0.6576  val_loss=1.2455 
+    [27w]  val_acc=0.6190  lr=2.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=69 epoch=9.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6190  lr=2.8e-04
+    [54w] Epoch 10/60  loss=0.9850  acc=0.7001  val_loss=1.1635 
+    [27w]  val_acc=0.6617  lr=2.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=70 epoch=10.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6617  lr=2.8e-04
+    [54w] Epoch 11/60  loss=0.9418  acc=0.7233  val_loss=1.1063 
+    [27w]  val_acc=0.6904  lr=2.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=71 epoch=11.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6904  lr=2.8e-04
+    [54w] Epoch 12/60  loss=0.8326  acc=0.7634  val_loss=0.9846 
+    [27w]  val_acc=0.7284  lr=2.7e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=72 epoch=12.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.7284  lr=2.7e-04
+    [54w] Epoch 13/60  loss=0.7967  acc=0.7808  val_loss=0.9368 
+    [27w]  val_acc=0.7562  lr=2.7e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=73 epoch=13.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.7562  lr=2.7e-04
+    [54w] Epoch 14/60  loss=0.7392  acc=0.8055  val_loss=0.8703 
+    [27w]  val_acc=0.7759  lr=2.6e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=74 epoch=14.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.7759  lr=2.6e-04
+    [54w] Epoch 15/60  loss=0.6506  acc=0.8337  val_loss=0.7601 
+    [27w]  val_acc=0.8070  lr=2.6e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=75 epoch=15.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8070  lr=2.6e-04
+    [54w] Epoch 16/60  loss=0.6050  acc=0.8471  val_loss=0.7271 
+    [27w]  val_acc=0.8151  lr=2.5e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=76 epoch=16.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8151  lr=2.5e-04
+    [54w] Epoch 17/60  loss=0.5824  acc=0.8676  val_loss=0.6946 
+    [27w]  val_acc=0.8316  lr=2.4e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=77 epoch=17.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8316  lr=2.4e-04
+    [54w] Epoch 18/60  loss=0.5621  acc=0.8666  val_loss=0.6502 
+    [27w]  val_acc=0.8371  lr=2.4e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=78 epoch=18.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8371  lr=2.4e-04
+    [54w] Epoch 19/60  loss=0.4972  acc=0.8891  val_loss=0.6063 
+    [27w]  val_acc=0.8656  lr=2.3e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=79 epoch=19.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8656  lr=2.3e-04
+    [54w] Epoch 20/60  loss=0.4572  acc=0.8873  val_loss=0.5351 
+    [27w]  val_acc=0.8518  lr=2.3e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=80 epoch=20.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8518  lr=2.3e-04
+    [54w] Epoch 21/60  loss=0.4288  acc=0.9045  val_loss=0.5493 
+    [27w]  val_acc=0.8792  lr=2.2e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=81 epoch=21.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8792  lr=2.2e-04
+    [54w] Epoch 22/60  loss=0.4273  acc=0.9173  val_loss=0.5398 
+    [27w]  val_acc=0.8956  lr=2.1e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=82 epoch=22.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8956  lr=2.1e-04
+    [54w] Epoch 23/60  loss=0.3584  acc=0.9215  val_loss=0.4668 
+    [27w]  val_acc=0.8960  lr=2.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=83 epoch=23.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8960  lr=2.0e-04
+    [54w] Epoch 24/60  loss=0.3641  acc=0.9231  val_loss=0.4488 
+    [27w]  val_acc=0.8927  lr=2.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=84 epoch=24.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8927  lr=2.0e-04
+    [54w] Epoch 25/60  loss=0.3338  acc=0.9373  val_loss=0.4459 
+    [27w]  val_acc=0.9106  lr=1.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=85 epoch=25.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.9106  lr=1.9e-04
+    [54w] Epoch 26/60  loss=0.3339  acc=0.9419  val_loss=0.4130 
+    [27w]  val_acc=0.9028  lr=1.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "sat12-dp154-9fcbe7f3-" 08:19 13-Nov-26
+pulse rev=86 epoch=26.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
