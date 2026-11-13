@@ -86,6 +86,26 @@ jobs:
           ssh -o BatchMode=yes lab1 "/opt/homebrew/bin/tmux new-session -d -s lm_1 'bash ~/train.sh'" || true
           mkdir -p ~/exp && printf 'seed: 42\nbatch_size: 64\nlr: 3e-4\nmodel:\n  name: vit_b16\n  pretrained: true\n' > ~/exp/config.yaml
           echo "print('hello')" > ~/exp/train.py
+          # An 8-bit label map (class ids 0-4), the kind that looks black in Preview.
+          python3 - <<'EOF'
+          import os, struct, zlib, math
+          w, h = 384, 256
+          rows = []
+          for y in range(h):
+              row = bytearray([0])
+              for x in range(w):
+                  v = 0
+                  if y > 170: v = 1                                          # road
+                  if (x - 110) ** 2 + (y - 120) ** 2 < 55 ** 2: v = 2         # car
+                  if 230 < x < 300 and 60 < y < 200: v = 3                     # person
+                  if y < 70 and x > 20 and math.sin(x / 18.0) * 12 + 40 > y: v = 4  # tree
+                  row.append(v)
+              rows.append(bytes(row))
+          raw = zlib.compress(b"".join(rows), 9)
+          def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+          png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0)) + chunk(b"IDAT", raw) + chunk(b"IEND", b"")
+          open(os.path.expanduser("~/exp/mask_0001.png"), "wb").write(png)
+          EOF
 
       - name: Seed workspace
         run: |
@@ -157,6 +177,23 @@ jobs:
           sleep 17
           screencapture -x shots/light-pulse.png || true
           kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-pulse.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
+      - name: Launch and capture (light, mask preview)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["sidebarMode"] = "files"
+          s["lastDirectories"] = {"config:lab1": os.path.expanduser("~/exp")}
+          json.dump(s, open(p, "w"))
+          EOF
+          LITEMUX_SMOKE_PREVIEW="config:lab1|$HOME/exp/mask_0001.png" ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-preview.log 2>&1 &
+          echo $! > app.pid
+          sleep 15
+          screencapture -x shots/light-preview.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-preview.log; exit 1)
           kill $(cat app.pid) 2>/dev/null || true
           sleep 2
 

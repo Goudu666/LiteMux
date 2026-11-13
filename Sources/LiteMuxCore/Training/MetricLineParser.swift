@@ -236,7 +236,9 @@ public struct MetricLineParser: Sendable {
         let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
         guard tokens.count >= 3, tokens[0].lowercased() == "epoch" else { return nil }
         guard tokens.dropFirst().contains(where: { isMetricName($0) }),
-              !tokens.dropFirst().contains(where: { Double($0) != nil }) else { return nil }
+              // A header names columns; "Epoch 7/40 loss=0.3" is a data line.
+              !tokens.dropFirst().contains(where: { $0.first?.isNumber == true || $0.contains("=") || $0.contains(":") })
+        else { return nil }
         return tokens
     }
 

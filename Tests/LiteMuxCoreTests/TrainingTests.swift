@@ -231,3 +231,33 @@ final class TrainingTrackerTests: XCTestCase {
         XCTAssertEqual(s.points.last?.x, Double(MetricSeries.capacity))
     }
 }
+
+final class LabelMapTests: XCTestCase {
+    private func rgba(_ pixels: [(UInt8, UInt8, UInt8)]) -> [UInt8] {
+        pixels.flatMap { [$0.0, $0.1, $0.2, 255] }
+    }
+
+    func testGrayClassIds() throws {
+        let px: [(UInt8, UInt8, UInt8)] = Array(repeating: (0, 0, 0), count: 6) + Array(repeating: (1, 1, 1), count: 3) + [(7, 7, 7)]
+        let map = try XCTUnwrap(LabelMap.analyze(rgba: rgba(px), pixelCount: px.count))
+        XCTAssertEqual(map.kind, .gray)
+        XCTAssertEqual(map.labels.map(\.value), [0, 1, 7])
+        XCTAssertEqual(map.labels[0].fraction, 0.6, accuracy: 1e-9)
+        XCTAssertTrue(map.needsColoring)
+    }
+
+    func testPaletteMaskAndPhoto() throws {
+        let px: [(UInt8, UInt8, UInt8)] = [(0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 0, 0)]
+        let map = try XCTUnwrap(LabelMap.analyze(rgba: rgba(px), pixelCount: px.count))
+        XCTAssertEqual(map.kind, .color)
+        XCTAssertEqual(map.labels.map(\.value), [0x000000, 0x008000, 0x800000])
+
+        // A gradient (a photo) has far too many values.
+        let photo = (0..<200).map { (UInt8($0), UInt8(255 - $0), UInt8($0 / 2)) }
+        XCTAssertNil(LabelMap.analyze(rgba: rgba(photo), pixelCount: photo.count))
+        // So does a single flat colour, in the other direction.
+        XCTAssertNil(LabelMap.analyze(rgba: rgba([(9, 9, 9), (9, 9, 9)]), pixelCount: 2))
+        XCTAssertTrue(LabelMap.isImage("mask_0001.PNG"))
+        XCTAssertFalse(LabelMap.isImage("train.py"))
+    }
+}

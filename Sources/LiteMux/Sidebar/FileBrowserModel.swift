@@ -165,6 +165,8 @@ final class FileBrowserModel {
     func activate(_ entry: FileEntry) {
         if entry.behavesAsDirectory {
             toggle(entry)
+        } else if let host, LabelMap.isImage(entry.name) {
+            app?.previewImage(host: host, path: entry.path, size: entry.size)
         } else if let host {
             app?.openEditor(host: host, path: entry.path, size: entry.size)
         }

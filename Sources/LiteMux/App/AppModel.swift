@@ -75,6 +75,14 @@ final class AppModel {
             // CI screenshot of the Training Pulse panel.
             DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak self] in self?.showPulsePanel = true }
         }
+        if let spec = ProcessInfo.processInfo.environment["LITEMUX_SMOKE_PREVIEW"] {
+            // CI screenshot of the mask preview: "<hostID>|<path>".
+            let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                guard let self, parts.count == 2, let h = self.host(parts[0]) else { return }
+                self.previewImage(host: h, path: parts[1], size: 0)
+            }
+        }
         applyAppearance()
         activeHostChanged()
     }
@@ -378,6 +386,34 @@ final class AppModel {
                 selectTab(tab.id)
             } catch {
                 toast("打开失败：\(error.localizedDescription)", style: .error)
+            }
+        }
+    }
+
+    /// Images (and segmentation masks) open in a Quick Look style window.
+    func previewImage(host: HostEntry, path: String, size: UInt64) {
+        let name = RemotePath.lastComponent(path)
+        Task {
+            do {
+                let fs = try await hub.fileSystem(for: host)
+                let realSize = (try? await fs.size(of: path)) ?? size
+                if case .tooLarge(let s)? = TextFileGate.check(size: realSize) {
+                    offerDownload(host: host, path: path, size: s, title: "「\(name)」太大，无法直接预览",
+                                  message: "文件大小 \(s.compactByteString)，超过 5 MB 的预览上限。可以下载后用本地工具查看。")
+                    return
+                }
+                let data = try await fs.readFile(path)
+                let place = host.isLocal ? path : "\(host.title):\(path)"
+                let image = await Task.detached(priority: .userInitiated) {
+                    PreviewImage.decode(data, name: name, place: place)
+                }.value
+                guard let image else {
+                    toast("无法解码图片「\(name)」", style: .error)
+                    return
+                }
+                ImagePreviewWindows.show(image)
+            } catch {
+                toast("预览失败：\(error.localizedDescription)", style: .error)
             }
         }
     }
