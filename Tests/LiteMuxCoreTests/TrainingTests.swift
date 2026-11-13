@@ -241,6 +241,12 @@ final class TrainingTrackerTests: XCTestCase {
                     ScreenRow(text: String(repeating: "x", count: 20)), ScreenRow(text: "tail")]
         XCTAssertEqual(TrainingTracker.logicalLines(rows, cols: 20),
                        ["Epoch 3/40  loss=0.123  acc=0.9", String(repeating: "x", count: 20) + "tail"])
+        // Seen in CI through tmux: a new line flagged as a continuation of a short row.
+        let tmux = [ScreenRow(text: " val_acc=0.2490  lr=3.0e-04"),
+                    ScreenRow(text: "Epoch  3/60  loss=1.7830  acc=0.3452  val_loss=1.9927 ", isWrapped: true),
+                    ScreenRow(text: " val_acc=0.3183  lr=3.0e-04", isWrapped: true)]
+        XCTAssertEqual(TrainingTracker.logicalLines(tmux, cols: 54),
+                       [" val_acc=0.2490  lr=3.0e-04", "Epoch  3/60  loss=1.7830  acc=0.3452  val_loss=1.9927  val_acc=0.3183  lr=3.0e-04"])
     }
 
     func testSeriesDecimatesWhenFull() {

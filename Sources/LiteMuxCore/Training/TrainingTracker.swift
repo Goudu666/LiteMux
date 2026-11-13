@@ -189,18 +189,22 @@ public final class TrainingTracker {
         self.now = now
     }
 
-    /// Joins soft-wrapped rows into logical lines. Rows that fill the width are
-    /// treated as wrapped too, because tmux redraws lose the wrap flag.
+    /// Joins soft-wrapped rows into logical lines.
+    ///
+    /// Through tmux the terminal's wrap flag is unreliable in both directions (a
+    /// full redraw drops it, and scrolling can set it on a row that starts a new
+    /// line), so a row continues the previous one exactly when the previous row
+    /// filled the width. tmux moves the wrapping space to the next row, so "full"
+    /// means at least `cols - 1` characters.
     public static func logicalLines(_ rows: [ScreenRow], cols: Int) -> [String] {
         var lines: [String] = []
         var previousFull = false
         for row in rows {
-            if (row.isWrapped || previousFull), !lines.isEmpty {
+            if previousFull, !lines.isEmpty {
                 lines[lines.count - 1] += row.text
             } else {
                 lines.append(row.text)
             }
-            // tmux moves the wrapping space to the next row, so "full" is one short.
             previousFull = cols > 8 && row.text.count >= cols - 1
         }
         return lines
