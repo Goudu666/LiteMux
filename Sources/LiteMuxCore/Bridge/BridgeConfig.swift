@@ -118,7 +118,8 @@ public struct BridgeActivityLog: Sendable {
         if !fm.fileExists(atPath: url.path) {
             fm.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600])
         }
-        guard let handle = try? FileHandle(forWritingTo: url) else { return }
+        // Read-write: trimming reads the file back through the same locked handle.
+        guard let handle = try? FileHandle(forUpdating: url) else { return }
         defer { try? handle.close() }
         // An advisory lock keeps two agents' lines from interleaving.
         flock(handle.fileDescriptor, LOCK_EX)
