@@ -132,3 +132,10 @@ public enum BridgeScripts {
         return s
     }
 }
+
+/// A failure the agent should read, not a protocol error.
+public struct BridgeToolError: Error, CustomStringConvertible, Equatable {
+    public var message: String
+    public init(_ message: String) { self.message = message }
+    public var description: String { message }
+}
