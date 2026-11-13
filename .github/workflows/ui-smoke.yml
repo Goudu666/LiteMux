@@ -127,7 +127,7 @@ jobs:
         if: always()
         run: |
           for f in shots/*.png; do
-            sips -Z 1800 -s format jpeg -s formatOptions 72 "$f" --out "${f%.png}.jpg" >/dev/null
+            sips -Z 1100 -s format jpeg -s formatOptions 50 "$f" --out "${f%.png}.jpg" >/dev/null
             echo "@@IMG-BEGIN $(basename "${f%.png}")"
             base64 -b 3000 -i "${f%.png}.jpg"
             echo "@@IMG-END"
