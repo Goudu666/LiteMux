@@ -115,21 +115,16 @@ public struct ProcessBridgeShell: BridgeShell {
     }
 
     /// Runs a process with capped output and a hard timeout.
+    ///
+    /// Plain `posix_spawn` and dedicated threads rather than `Process` and the
+    /// GCD pool: the child gets only stdin/stdout/stderr (no inherited
+    /// descriptors), its own process group (a timeout kills the whole job),
+    /// default signal handling (the app ignores SIGPIPE), and no blocking call
+    /// ever waits on a shared worker pool.
     public static func execute(_ executable: String, _ arguments: [String], environment: [String: String]?,
                                directory: String?, stdin: Data?, timeout: TimeInterval, outputLimit: Int) async -> ShellResult {
         await withCheckedContinuation { (cont: CheckedContinuation<ShellResult, Never>) in
             let started = Date()
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: executable)
-            p.arguments = arguments
-            if let environment { p.environment = environment }
-            if let directory { p.currentDirectoryURL = URL(fileURLWithPath: directory) }
-            let out = Pipe(), err = Pipe()
-            p.standardOutput = out
-            p.standardError = err
-            let input = stdin.map { _ in Pipe() }
-            p.standardInput = input ?? FileHandle.nullDevice
-
             let state = ExecutionState(limit: outputLimit)
             let finish: @Sendable (Int32?) -> Void = { status in
                 guard let result = state.finish(status: status ?? -1, started: started) else { return }
@@ -137,56 +132,123 @@ public struct ProcessBridgeShell: BridgeShell {
                 cont.resume(returning: result)
             }
             trace("exec \(executable) \(arguments.suffix(2).joined(separator: " ").prefix(120))")
-            do {
-                try p.run()
-            } catch {
-                state.appendErr(Data(error.localizedDescription.utf8))
+
+            var outPipe: [Int32] = [-1, -1], errPipe: [Int32] = [-1, -1], inPipe: [Int32] = [-1, -1]
+            var piped = pipe(&outPipe) == 0 && pipe(&errPipe) == 0
+            if piped, stdin != nil { piped = pipe(&inPipe) == 0 }
+            guard piped else {
+                for fd in outPipe + errPipe + inPipe where fd >= 0 { close(fd) }
+                state.appendErr(Data("pipe: \(String(cString: strerror(errno)))".utf8))
                 finish(127)
                 return
             }
-            if let input, let stdin {
-                DispatchQueue.global().async {
-                    try? input.fileHandleForWriting.write(contentsOf: stdin)
-                    try? input.fileHandleForWriting.close()
-                }
+
+            var actions: posix_spawn_file_actions_t?
+            posix_spawn_file_actions_init(&actions)
+            defer { posix_spawn_file_actions_destroy(&actions) }
+            if stdin != nil {
+                posix_spawn_file_actions_adddup2(&actions, inPipe[0], 0)
+            } else {
+                posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0)
             }
-            let group = DispatchGroup()
-            for (pipe, isOut) in [(out, true), (err, false)] {
-                group.enter()
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let h = pipe.fileHandleForReading
-                    while true {
-                        let chunk = h.availableData
-                        if chunk.isEmpty { break }
-                        if isOut { state.appendOut(chunk) } else { state.appendErr(chunk) }
+            posix_spawn_file_actions_adddup2(&actions, outPipe[1], 1)
+            posix_spawn_file_actions_adddup2(&actions, errPipe[1], 2)
+            if let directory { posix_spawn_file_actions_addchdir_np(&actions, directory) }
+
+            var attr: posix_spawnattr_t?
+            posix_spawnattr_init(&attr)
+            defer { posix_spawnattr_destroy(&attr) }
+            let flags = POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK
+            posix_spawnattr_setflags(&attr, Int16(flags))
+            posix_spawnattr_setpgroup(&attr, 0)
+            // Darwin's sigset_t is a bit mask: reset SIGPIPE, block nothing.
+            var defaults: sigset_t = 1 << (SIGPIPE - 1)
+            posix_spawnattr_setsigdefault(&attr, &defaults)
+            var mask: sigset_t = 0
+            posix_spawnattr_setsigmask(&attr, &mask)
+
+            let env = (environment ?? ProcessInfo.processInfo.environment).map { "\($0.key)=\($0.value)" }
+            let argv: [UnsafeMutablePointer<CChar>?] = ([executable] + arguments).map { strdup($0) } + [nil]
+            let envp: [UnsafeMutablePointer<CChar>?] = env.map { strdup($0) } + [nil]
+            var pid: pid_t = 0
+            let rc = posix_spawn(&pid, executable, &actions, &attr, argv, envp)
+            let child = pid
+            for p in argv + envp { free(p) }
+            close(outPipe[1]); close(errPipe[1])
+            if stdin != nil { close(inPipe[0]) }
+            guard rc == 0 else {
+                close(outPipe[0]); close(errPipe[0])
+                if stdin != nil { close(inPipe[1]) }
+                state.appendErr(Data("\(executable): \(String(cString: strerror(rc)))".utf8))
+                finish(127)
+                return
+            }
+
+            if let stdin {
+                let fd = inPipe[1]
+                Thread {
+                    stdin.withUnsafeBytes { raw in
+                        var offset = 0
+                        while offset < raw.count {
+                            let n = write(fd, raw.baseAddress! + offset, raw.count - offset)
+                            if n > 0 { offset += n } else if n < 0, errno == EINTR { continue } else { break }
+                        }
                     }
-                    group.leave()
-                }
+                    close(fd)
+                }.start()
             }
-            let timer = DispatchSource.makeTimerSource(queue: .global())
-            timer.schedule(deadline: .now() + timeout)
-            timer.setEventHandler {
-                guard p.isRunning else { return }
+
+            let drained = DispatchGroup()
+            for (fd, isOut) in [(outPipe[0], true), (errPipe[0], false)] {
+                drained.enter()
+                Thread {
+                    let capacity = 65_536
+                    var buffer = [UInt8](repeating: 0, count: capacity)
+                    while true {
+                        let n = read(fd, &buffer, capacity)
+                        if n > 0 {
+                            let chunk = Data(buffer[0..<n])
+                            if isOut { state.appendOut(chunk) } else { state.appendErr(chunk) }
+                        } else if n < 0, errno == EINTR {
+                            continue
+                        } else {
+                            break
+                        }
+                    }
+                    close(fd)
+                    drained.leave()
+                }.start()
+            }
+
+            let exited = DispatchSemaphore(value: 0)
+            Thread {
+                var status: Int32 = 0
+                while waitpid(child, &status, 0) < 0, errno == EINTR {}
+                exited.signal()
+                let signal = status & 0x7f
+                let code = signal == 0 ? (status >> 8) & 0xff : 128 + signal
+                // Normally the pipes drain at once. Something that outlives the
+                // command (a backgrounded job) may keep them open: answer with
+                // what we have instead of waiting for it.
+                if drained.wait(timeout: .now() + 3) == .timedOut {
+                    trace("pipes still open 3s after exit: \(executable)")
+                }
+                finish(code)
+            }.start()
+
+            Thread {
+                guard exited.wait(timeout: .now() + timeout) == .timedOut else { return }
+                trace("timeout after \(timeout)s: \(executable)")
                 state.markTimedOut()
-                p.terminate()
-                // A child that left a grandchild holding the pipe must not hang the agent.
-                DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-                    if p.isRunning { kill(p.processIdentifier, SIGKILL) }
+                kill(-child, SIGTERM)
+                kill(child, SIGTERM)
+                if exited.wait(timeout: .now() + 2) == .timedOut {
+                    kill(-child, SIGKILL)
+                    kill(child, SIGKILL)
+                    Thread.sleep(forTimeInterval: 1)
                     finish(nil)
                 }
-            }
-            timer.resume()
-            DispatchQueue.global().async {
-                p.waitUntilExit()
-                timer.cancel()
-                // Normally the pipes drain at once. Something that outlives the
-                // command (a backgrounded job, an ssh mux master) may keep them
-                // open: answer with what we have instead of waiting for it.
-                if group.wait(timeout: .now() + 3) == .timedOut {
-                    trace("pipes still open 3s after exit: \(executable) \(arguments.last ?? "")")
-                }
-                finish(p.terminationStatus)
-            }
+            }.start()
         }
     }
 }
