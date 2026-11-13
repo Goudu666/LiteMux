@@ -174,7 +174,10 @@ struct HostToolsView: View {
                     row {
                         Image(systemName: "arrow.left.arrow.right").foregroundStyle(Theme.accentColor).font(.system(size: 10))
                         Text("localhost:\(String(f.localPort))").font(.system(size: 12, design: .monospaced))
-                        Text(f.remotePort == f.localPort ? f.label : "→ \(f.remotePort) · \(f.label)").foregroundStyle(.secondary)
+                            .fixedSize()
+                        Text(([f.remotePort == f.localPort ? nil : "→ \(f.remotePort)",
+                               f.label.hasPrefix("端口 ") ? nil : f.label] as [String?]).compactMap { $0 }.joined(separator: " · "))
+                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                         Spacer()
                         Button("打开") { _ = NSWorkspace.shared.open(f.url) }
                         Button("停止") { Task { await tools.cancel(f, on: host) } }
@@ -230,7 +233,7 @@ struct HostToolsView: View {
         .font(.system(size: 12))
         .controlSize(.small)
         .padding(14)
-        .frame(width: 360)
+        .frame(width: 400)
         .task { await tools.refresh(host) }
     }
 
