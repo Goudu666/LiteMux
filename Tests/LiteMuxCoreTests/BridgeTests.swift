@@ -141,13 +141,23 @@ final class BridgeServerTests: XCTestCase {
         let shell = FakeShell()
         let recorder = ConfirmRecorder()
         let server = makeServer(shell, mode: .trusted, recorder: recorder)
-        shell.reply("cat >", "12\n")
+        shell.reply("base64", "12\n")
         let r = try await tool(server, "write_file", ["path": "~/exp/a.yaml", "content": "lr: 3e-4\n"])
         XCTAssertFalse(r.isError, r.text)
         XCTAssertTrue(recorder.asked.isEmpty)
         let last = try XCTUnwrap(shell.ran.last)
-        XCTAssertEqual(last.stdin, Data("lr: 3e-4\n".utf8))
+        XCTAssertNil(last.stdin)
         XCTAssertTrue(last.script.contains("P=\"$HOME\"/exp/a.yaml"))
+        XCTAssertTrue(last.script.contains(Data("lr: 3e-4\n".utf8).base64EncodedString()))
+
+        // Big content goes in chunks: the first truncates, the rest append.
+        let big = String(repeating: "x", count: BridgeScripts.writeChunk * 2 + 10)
+        let before = shell.ran.count
+        _ = try await tool(server, "write_file", ["path": "/tmp/big.txt", "content": .string(big)])
+        let writes = shell.scripts.suffix(shell.ran.count - before)
+        XCTAssertEqual(writes.count, 3)
+        XCTAssertTrue(writes.first?.contains("| $B > ") == true)
+        XCTAssertTrue(writes.dropFirst().allSatisfy { $0.contains("| $B >> ") })
     }
 
     func testReadTerminalPicksHostAndSession() async throws {
@@ -378,6 +388,14 @@ final class BridgePartsTests: XCTestCase {
 
         let piped = await shell.run("cat", on: .local, stdin: Data("from stdin".utf8), timeout: 10, outputLimit: 1000)
         XCTAssertEqual(piped.out, "from stdin")
+
+        let written = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "/a b/x.txt").path
+        let w = await shell.run(BridgeScripts.write(path: written, chunk: Data("héllo\n".utf8), append: false),
+                                on: .local, stdin: nil, timeout: 10, outputLimit: 1000)
+        XCTAssertEqual(w.status, 0, w.err)
+        _ = await shell.run(BridgeScripts.write(path: written, chunk: Data("again\n".utf8), append: true),
+                            on: .local, stdin: nil, timeout: 10, outputLimit: 1000)
+        XCTAssertEqual(try String(contentsOfFile: written, encoding: .utf8), "héllo\nagain\n")
 
         let started = Date()
         let slow = await shell.run("sleep 30", on: .local, stdin: nil, timeout: 1, outputLimit: 1000)

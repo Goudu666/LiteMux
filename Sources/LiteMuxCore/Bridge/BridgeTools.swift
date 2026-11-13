@@ -356,11 +356,18 @@ public struct BridgeToolbox: Sendable {
             let preview = content.components(separatedBy: "\n").prefix(24).joined(separator: "\n")
             try await call.authorize(action: append ? "追加到文件" : "写入文件",
                                      detail: "\(path)（\(data.count) 字节）\n────────\n\(preview)")
-            let r = try await run(BridgeScripts.write(path: path, append: append), on: host, stdin: data, timeout: 60)
-            guard r.status == 0 else {
-                throw BridgeToolError("写入失败：" + r.err.trimmingCharacters(in: .whitespacesAndNewlines))
-            }
-            let size = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
+            var size = ""
+            var offset = 0
+            repeat {
+                let chunk = data.subdata(in: offset..<min(data.count, offset + BridgeScripts.writeChunk))
+                let r = try await run(BridgeScripts.write(path: path, chunk: chunk, append: append || offset > 0),
+                                      on: host, timeout: 30)
+                guard r.status == 0 else {
+                    throw BridgeToolError("写入失败：" + r.err.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+                size = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
+                offset += chunk.count
+            } while offset < data.count
             return BridgeToolResult("已\(append ? "追加" : "写入") \(host.title):\(path)（文件现在 \(size) 字节）。")
         }
     }

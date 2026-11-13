@@ -117,14 +117,18 @@ public enum BridgeScripts {
         return s
     }
 
-    public static func write(path: String, append: Bool) -> String {
-        "P=\(pathWord(path))\nD=$(dirname -- \"$P\")\nmkdir -p -- \"$D\" || exit 2\ncat \(append ? ">>" : ">") \"$P\" || exit 2\nwc -c < \"$P\" | tr -d ' '\n"
-    }
-}
+    /// Raw bytes per `write` call. The content travels base64-encoded inside
+    /// the command (one argv string, which Linux caps at 128 KB), not over
+    /// stdin, so a multiplexed ssh never has to forward an EOF.
+    public static let writeChunk = 48 * 1024
 
-/// A failure the agent should read, not a protocol error.
-public struct BridgeToolError: Error, CustomStringConvertible, Equatable {
-    public var message: String
-    public init(_ message: String) { self.message = message }
-    public var description: String { message }
+    public static func write(path: String, chunk: Data, append: Bool) -> String {
+        var s = "P=\(pathWord(path))\n"
+        if !append { s += "D=$(dirname -- \"$P\")\nmkdir -p -- \"$D\" || exit 2\n" }
+        // GNU, busybox and current macOS take -d; older macOS only -D.
+        s += "if printf 'YQ==' | base64 -d >/dev/null 2>&1; then B='base64 -d'; else B='base64 -D'; fi\n"
+        s += "printf '%s' '\(chunk.base64EncodedString())' | $B \(append ? ">>" : ">") \"$P\" || exit 2\n"
+        s += "wc -c < \"$P\" | tr -d ' '\n"
+        return s
+    }
 }
