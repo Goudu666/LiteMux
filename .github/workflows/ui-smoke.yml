@@ -123,6 +123,17 @@ jobs:
           ls ~/.ssh/lm 2>/dev/null || true
           tail -20 shots/app-light.log || true
 
+      - name: Print screenshots (base64 JPEG)
+        if: always()
+        run: |
+          for f in shots/*.png; do
+            sips -Z 1800 -s format jpeg -s formatOptions 72 "$f" --out "${f%.png}.jpg" >/dev/null
+            echo "@@IMG-BEGIN $(basename "${f%.png}")"
+            base64 -b 3000 -i "${f%.png}.jpg"
+            echo "@@IMG-END"
+          done
+          echo "--- app logs ---"; cat shots/*.log || true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
