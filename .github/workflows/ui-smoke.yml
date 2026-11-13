@@ -142,6 +142,24 @@ jobs:
           kill $(cat app.pid) 2>/dev/null || true
           tail -20 shots/app-dark.log || true
 
+      - name: Launch and capture (colour themes)
+        run: |
+          for t in apricot mist sakura; do
+            python3 - "$t" <<'EOF'
+          import json, os, sys
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["appearance"] = "light"; s["colorTheme"] = sys.argv[1]; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+            ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-$t.log 2>&1 &
+            echo $! > app.pid
+            sleep 11
+            screencapture -x shots/theme-$t.png || true
+            kill -0 $(cat app.pid) && echo "$t: app alive" || (echo "APP EXITED"; cat shots/app-$t.log; exit 1)
+            kill $(cat app.pid) 2>/dev/null || true
+            sleep 2
+          done
+
       # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
       # them with git: `git fetch origin refs/ci/screenshots`.
       - name: Publish screenshots to refs/ci/screenshots

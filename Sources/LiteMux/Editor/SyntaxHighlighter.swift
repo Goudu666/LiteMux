@@ -73,7 +73,8 @@ struct SyntaxHighlighter {
     static let string = dyn(0x4E8A57, 0x9CC78F)
     static let number = dyn(0xB0662A, 0xE0A46A)
     static let keyword = dyn(0x8A4FA6, 0xC49AE3)
-    static let key = dyn(0x2E7D74, 0x7CCBBE)
+    /// Keys follow the theme's accent.
+    static var key: NSColor { Theme.accent }
     static let heading = dyn(0x2F2E2A, 0xF0F0EC)
 
     private static func re(_ pattern: String, _ options: NSRegularExpression.Options = [.anchorsMatchLines]) -> NSRegularExpression {

@@ -125,3 +125,22 @@ extension View {
         }
     }
 }
+
+/// A small coloured dot for theme menus. Not a template image, so menus keep its colour.
+enum ThemeSwatchImage {
+    static func make(_ spec: ColorThemeSpec) -> NSImage {
+        let image = NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
+            let paper = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
+            Theme.rgb(spec.light.chrome).setFill()
+            paper.fill()
+            Theme.rgb(spec.light.hairline, 0.25).setStroke()
+            paper.lineWidth = 1
+            paper.stroke()
+            Theme.rgb(spec.light.accent).setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 3.5, dy: 3.5)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+}

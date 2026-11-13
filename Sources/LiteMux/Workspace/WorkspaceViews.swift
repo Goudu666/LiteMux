@@ -41,6 +41,18 @@ struct AppearanceMenu: View {
             }
             .pickerStyle(.inline)
             Divider()
+            Picker("配色", selection: Binding(get: { model.state.colorTheme }, set: { model.setColorTheme($0) })) {
+                ForEach(ColorThemeSpec.all, id: \.id) { spec in
+                    Label {
+                        Text(spec.name)
+                    } icon: {
+                        Image(nsImage: ThemeSwatchImage.make(spec))
+                    }
+                    .tag(spec.id)
+                }
+            }
+            .pickerStyle(.inline)
+            Divider()
             Button("放大字号") { model.adjustFontSize(1) }
             Button("缩小字号") { model.adjustFontSize(-1) }
             Button("恢复默认字号") { model.adjustFontSize(0) }

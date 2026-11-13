@@ -5,11 +5,15 @@ import Foundation
 public struct PersistedState: Codable, Equatable, Sendable {
     public enum Appearance: String, Codable, Sendable, CaseIterable { case system, light, dark }
 
+    /// Colour family, independent of light/dark.
+    public enum ColorTheme: String, Codable, Sendable, CaseIterable { case paper, apricot, mist, sakura }
+
     public var version: Int = 1
     public var bookmarks: [Bookmark] = []
     /// Per-host override of "auto attach remote tmux".
     public var autoTmux: [String: Bool] = [:]
     public var appearance: Appearance = .light
+    public var colorTheme: ColorTheme = .paper
     public var fontSize: Double = 13
     public var sidebarWidth: Double = 240
     public var sidebarVisible: Bool = true
@@ -24,7 +28,7 @@ public struct PersistedState: Codable, Equatable, Sendable {
     public init() {}
 
     enum CodingKeys: String, CodingKey {
-        case version, bookmarks, autoTmux, appearance, fontSize, sidebarWidth, sidebarVisible, sidebarMode
+        case version, bookmarks, autoTmux, appearance, colorTheme, fontSize, sidebarWidth, sidebarVisible, sidebarMode
         case showHiddenFiles, useMetalRenderer, tabs, selectedTabIndex, lastDirectories
     }
 
@@ -35,6 +39,7 @@ public struct PersistedState: Codable, Equatable, Sendable {
         bookmarks = (try? c.decodeIfPresent([Bookmark].self, forKey: .bookmarks)) ?? d.bookmarks
         autoTmux = (try? c.decodeIfPresent([String: Bool].self, forKey: .autoTmux)) ?? d.autoTmux
         appearance = (try? c.decodeIfPresent(Appearance.self, forKey: .appearance)) ?? d.appearance
+        colorTheme = (try? c.decodeIfPresent(ColorTheme.self, forKey: .colorTheme)) ?? d.colorTheme
         fontSize = (try? c.decodeIfPresent(Double.self, forKey: .fontSize)) ?? d.fontSize
         sidebarWidth = (try? c.decodeIfPresent(Double.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
         sidebarVisible = (try? c.decodeIfPresent(Bool.self, forKey: .sidebarVisible)) ?? d.sidebarVisible

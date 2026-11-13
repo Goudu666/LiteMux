@@ -264,6 +264,19 @@ final class SplitTreeTests: XCTestCase {
         let s = try JSONDecoder().decode(PersistedState.self, from: Data(json.utf8))
         XCTAssertEqual(s.fontSize, 15)
         XCTAssertTrue(s.sidebarVisible)
+        XCTAssertEqual(s.colorTheme, .paper)
+        XCTAssertEqual(s.appearance, .light)
+    }
+
+    func testColorThemeRoundTripAndUnknownValue() throws {
+        var state = PersistedState()
+        state.colorTheme = .sakura
+        let back = try JSONDecoder().decode(PersistedState.self, from: JSONEncoder().encode(state))
+        XCTAssertEqual(back.colorTheme, .sakura)
+        // A theme from a newer build falls back instead of failing the whole file.
+        let future = try JSONDecoder().decode(PersistedState.self, from: Data(#"{"colorTheme": "neon", "fontSize": 14}"#.utf8))
+        XCTAssertEqual(future.colorTheme, .paper)
+        XCTAssertEqual(future.fontSize, 14)
     }
 }
 

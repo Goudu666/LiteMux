@@ -69,6 +69,7 @@ final class AppModel {
         }
         reloadSSHConfig()
         restoreTabs()
+        ThemeStore.shared.current = state.colorTheme
         applyAppearance()
         activeHostChanged()
     }
@@ -467,6 +468,22 @@ final class AppModel {
     }
 
     // MARK: - Appearance & layout
+
+    func setColorTheme(_ t: PersistedState.ColorTheme) {
+        guard t != state.colorTheme else { return }
+        state.colorTheme = t
+        ThemeStore.shared.current = t
+        // SwiftUI follows the store; AppKit surfaces need a nudge.
+        window?.backgroundColor = Theme.canvas
+        for s in sessions.values { s.view.applyLiteMuxTheme(); s.view.needsDisplay = true }
+        if let root = window?.contentView { Self.redraw(root) }
+        scheduleSave()
+    }
+
+    private static func redraw(_ view: NSView) {
+        view.needsDisplay = true
+        for sub in view.subviews { redraw(sub) }
+    }
 
     func setAppearance(_ a: PersistedState.Appearance) {
         state.appearance = a
