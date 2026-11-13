@@ -39,6 +39,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
 
         if let tab = model.selectedTab, let pane = tab.focusedPane { model.focusSoon(pane.id) }
+
+        if ProcessInfo.processInfo.environment["LITEMUX_DEBUG_VIEWS"] == "1" {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                if let frame = window.contentView?.superview { Self.dump(frame, depth: 0) }
+            }
+        }
+    }
+
+    /// Prints the window's view tree (debug aid for title-bar layout).
+    private static func dump(_ view: NSView, depth: Int) {
+        guard depth < 7 else { return }
+        let pad = String(repeating: "  ", count: depth)
+        print("\(pad)\(type(of: view)) frame=\(view.frame) hidden=\(view.isHidden) alpha=\(view.alphaValue) layer=\(view.layer.map { String(describing: type(of: $0)) } ?? "-")")
+        for sub in view.subviews { dump(sub, depth: depth + 1) }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

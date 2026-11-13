@@ -58,25 +58,19 @@ struct AppearanceMenu: View {
     }
 }
 
+/// Tabs share the bar's width like Safari's compact tabs: they shrink
+/// before they ever scroll, so the strip never needs a scroll view.
 struct TabStrip: View {
     let model: AppModel
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(model.tabs) { tab in
-                        TabChip(tab: tab, model: model, selected: tab.id == model.selectedTabID)
-                            .id(tab.id)
-                    }
-                }
-                .padding(.vertical, 1)
-            }
-            .onChange(of: model.selectedTabID) { _, id in
-                if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id) } }
+        HStack(spacing: 2) {
+            ForEach(model.tabs) { tab in
+                TabChip(tab: tab, model: model, selected: tab.id == model.selectedTabID)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 }
 
@@ -126,7 +120,7 @@ struct TabChip: View {
         }
         .padding(.leading, 10)
         .padding(.trailing, 6)
-        .frame(minWidth: 96, maxWidth: 220, minHeight: 24, maxHeight: 24)
+        .frame(minWidth: 64, maxWidth: 220, minHeight: 24, maxHeight: 24)
         .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
             .fill(selected ? Color.primary.opacity(0.085) : (hovering ? Color.primary.opacity(0.04) : .clear)))
         .foregroundStyle(selected ? .primary : .secondary)

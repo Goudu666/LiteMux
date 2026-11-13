@@ -99,7 +99,7 @@ jobs:
       - name: Launch and capture (dark, hosts)
         run: |
           mkdir -p shots
-          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-dark.log 2>&1 &
+          LITEMUX_DEBUG_VIEWS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-dark.log 2>&1 &
           echo $! > app.pid
           sleep 14
           screencapture -x shots/dark-hosts.png || true
