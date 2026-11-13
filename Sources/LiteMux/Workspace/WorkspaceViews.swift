@@ -121,8 +121,13 @@ struct TabChip: View {
         .padding(.leading, 10)
         .padding(.trailing, 6)
         .frame(minWidth: 64, maxWidth: 220, minHeight: 24, maxHeight: 24)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(selected ? Color.primary.opacity(0.085) : (hovering ? Color.primary.opacity(0.04) : .clear)))
+        .background {
+            if selected {
+                RaisedPlate(cornerRadius: 6)
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(0.045))
+            }
+        }
         .foregroundStyle(selected ? .primary : .secondary)
         .contentShape(Rectangle())
         .onTapGesture { model.selectTab(tab.id) }

@@ -36,6 +36,7 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.18), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.toastItem)
+        .tint(Theme.accentColor)
         .frame(minWidth: 720, minHeight: 420)
     }
 
@@ -68,7 +69,7 @@ struct ToastView: View {
         if let t = model.toastItem {
             HStack(spacing: 10) {
                 Image(systemName: icon(t.style))
-                    .foregroundStyle(t.style == .error ? Color(nsColor: .systemOrange) : Color.secondary)
+                    .foregroundStyle(t.style == .error ? Color(nsColor: Theme.warning) : Color.secondary)
                 Text(t.text).font(.system(size: 12)).lineLimit(2)
                 if let title = t.actionTitle, let action = t.action {
                     Button(title) { action(); model.toastItem = nil }

@@ -74,7 +74,7 @@ struct StatusBarView: View {
 
     private func level(_ fraction: Double) -> Color {
         if fraction >= 0.92 { return Color(nsColor: .systemRed) }
-        if fraction >= 0.80 { return Color(nsColor: .systemOrange) }
+        if fraction >= 0.80 { return Color(nsColor: Theme.warning) }
         return .primary
     }
 
@@ -109,14 +109,14 @@ private struct GPUChip: View {
             HStack(spacing: 0) {
                 Text("GPU\(gpu.index) ").foregroundStyle(.secondary)
                 Text(String(format: "%.1f", gpu.memoryUsedMiB / 1024))
-                    .foregroundColor(busy ? Color(nsColor: .systemOrange) : .primary)
+                    .foregroundColor(busy ? Color(nsColor: Theme.warning) : .primary)
                 Text(String(format: "/%.0fG ", gpu.memoryTotalMiB / 1024)).foregroundStyle(.secondary)
                 Text(String(format: "%.0f%%", gpu.utilization))
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.08))
-                    Capsule().fill(busy ? Color(nsColor: .systemOrange) : Color(nsColor: .systemGreen))
+                    Capsule().fill(busy ? Color(nsColor: Theme.warning) : Theme.accentColor)
                         .frame(width: max(1.5, geo.size.width * gpu.memoryFraction))
                 }
             }

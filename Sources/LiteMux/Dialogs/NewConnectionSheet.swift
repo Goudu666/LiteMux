@@ -29,7 +29,7 @@ struct NewConnectionSheet: View {
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(parseFailed ? Color(nsColor: .systemOrange).opacity(0.7)
-                                  : (pasteFocused ? Color.accentColor.opacity(0.6) : Theme.hairlineColor)))
+                                  : (pasteFocused ? Theme.accentColor.opacity(0.6) : Theme.hairlineColor)))
                 .focused($pasteFocused)
                 .onChange(of: draft.pasted) { _, text in
                     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { parseFailed = false; return }

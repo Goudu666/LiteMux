@@ -9,7 +9,7 @@ public struct PersistedState: Codable, Equatable, Sendable {
     public var bookmarks: [Bookmark] = []
     /// Per-host override of "auto attach remote tmux".
     public var autoTmux: [String: Bool] = [:]
-    public var appearance: Appearance = .system
+    public var appearance: Appearance = .light
     public var fontSize: Double = 13
     public var sidebarWidth: Double = 240
     public var sidebarVisible: Bool = true

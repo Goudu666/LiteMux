@@ -69,12 +69,12 @@ struct SyntaxHighlighter {
         return NSColor(name: nil) { a in Theme.isDark(a) ? c(dark) : c(light) }
     }
 
-    static let comment = dyn(0x8a8a86, 0x6f727a)
-    static let string = dyn(0x3f7d3a, 0x9cc78f)
-    static let number = dyn(0xa65b12, 0xe0a46a)
-    static let keyword = dyn(0x8a3fa8, 0xc49ae3)
-    static let key = dyn(0x2f5fa8, 0x86aee6)
-    static let heading = dyn(0x1f1f21, 0xf0f0ec)
+    static let comment = dyn(0x9A968C, 0x6F727A)
+    static let string = dyn(0x4E8A57, 0x9CC78F)
+    static let number = dyn(0xB0662A, 0xE0A46A)
+    static let keyword = dyn(0x8A4FA6, 0xC49AE3)
+    static let key = dyn(0x2E7D74, 0x7CCBBE)
+    static let heading = dyn(0x2F2E2A, 0xF0F0EC)
 
     private static func re(_ pattern: String, _ options: NSRegularExpression.Options = [.anchorsMatchLines]) -> NSRegularExpression {
         // Patterns are literals in this file; a failure here is a programming error.

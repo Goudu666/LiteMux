@@ -26,7 +26,7 @@ struct SidebarView: View {
             case .files: FileTreeView(model: model, browser: model.files)
             }
         }
-        .background(VisualEffectBackground(material: .sidebar))
+        .background(ZStack { VisualEffectBackground(material: .sidebar); Theme.sidebarTintColor })
     }
 }
 
@@ -249,7 +249,7 @@ struct FileTreeView: View {
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.accentColor.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    .strokeBorder(Theme.accentColor.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                     .padding(6)
                     .allowsHitTesting(false)
             }
@@ -300,7 +300,7 @@ struct FileRow: View {
             .frame(width: 10)
             Image(systemName: FileIcon.symbol(for: e))
                 .font(.system(size: 11.5))
-                .foregroundStyle(isDir ? Color.accentColor.opacity(0.85) : Color.secondary)
+                .foregroundStyle(isDir ? Theme.accentColor.opacity(0.85) : Color.secondary)
                 .frame(width: 16)
             Text(e.name)
                 .font(.system(size: 12))
@@ -321,7 +321,7 @@ struct FileRow: View {
         }
         .padding(.leading, CGFloat(row.depth) * 14)
         .contentShape(Rectangle())
-        .background(RoundedRectangle(cornerRadius: 4).fill(targeted ? Color.accentColor.opacity(0.18) : .clear))
+        .background(RoundedRectangle(cornerRadius: 4).fill(targeted ? Theme.accentColor.opacity(0.18) : .clear))
         .help(e.path)
         .modifier(DirectoryDrop(enabled: isDir, targeted: $targeted) { urls in
             browser.upload(urls, to: e.path)

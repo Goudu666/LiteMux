@@ -85,25 +85,26 @@ jobs:
           bid = u()
           state = {
             "version": 1,
-            "appearance": "dark",
+            "appearance": "light",
             "sidebarMode": "hosts",
             "bookmarks": [{"id": bid, "name": "autodl-westb-38192",
                            "endpoint": {"host": "connect.westb.seetacloud.com", "user": "root", "port": 38192, "options": []},
                            "hasSavedPassword": False, "createdAt": "2026-11-13T00:00:00Z"}],
-            "tabs": [{"id": u(), "kind": {"terminal": {"_0": tree}}}],
+            "tabs": [{"id": u(), "kind": {"terminal": {"_0": tree}}},
+                     {"id": u(), "kind": {"terminal": {"_0": leaf("local", 4)}}}],
             "selectedTabIndex": 0,
           }
           json.dump(state, open(os.path.expanduser("~/.config/litemux/state.json"), "w"), indent=2)
           EOF
 
-      - name: Launch and capture (dark, hosts)
+      - name: Launch and capture (light, hosts)
         run: |
           mkdir -p shots
-          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-dark.log 2>&1 &
+          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-light-hosts.log 2>&1 &
           echo $! > app.pid
           sleep 14
-          screencapture -x shots/dark-hosts.png || true
-          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-dark.log; exit 1)
+          screencapture -x shots/light-hosts.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light-hosts.log; exit 1)
           osascript -e 'tell application "System Events" to keystroke "q" using command down' 2>/dev/null || kill $(cat app.pid)
           sleep 3; kill $(cat app.pid) 2>/dev/null || true
           cat ~/.config/litemux/state.json | head -40
@@ -113,18 +114,33 @@ jobs:
           python3 - <<'EOF'
           import json, os
           p = os.path.expanduser("~/.config/litemux/state.json")
-          s = json.load(open(p)); s["appearance"] = "light"; s["sidebarMode"] = "files"
+          s = json.load(open(p)); s["sidebarMode"] = "files"
           s["lastDirectories"] = {"config:lab1": os.path.expanduser("~/exp")}
           json.dump(s, open(p, "w"))
           EOF
-          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-light.log 2>&1 &
+          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-light-files.log 2>&1 &
           echo $! > app.pid
           sleep 14
           screencapture -x shots/light-files.png || true
-          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light.log; exit 1)
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light-files.log; exit 1)
           kill $(cat app.pid) 2>/dev/null || true
-          ls ~/.ssh/lm 2>/dev/null || true
-          tail -20 shots/app-light.log || true
+          sleep 2
+
+      - name: Launch and capture (dark, hosts)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["appearance"] = "dark"; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-dark.log 2>&1 &
+          echo $! > app.pid
+          sleep 12
+          screencapture -x shots/dark-hosts.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-dark.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          tail -20 shots/app-dark.log || true
 
       # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
       # them with git: `git fetch origin refs/ci/screenshots`.

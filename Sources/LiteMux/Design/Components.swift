@@ -63,6 +63,18 @@ struct BarButton: View {
     }
 }
 
+/// The selected tab or segment: a sheet of paper lifted a hair off the bar.
+struct RaisedPlate: View {
+    var cornerRadius: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        shape.fill(Theme.raisedColor)
+            .overlay(shape.strokeBorder(Theme.hairlineColor, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.07), radius: 1.5, y: 0.5)
+    }
+}
+
 /// Online / offline indicator.
 struct StatusDot: View {
     var online: Bool
@@ -94,15 +106,14 @@ struct SegmentedSwitch<T: Hashable>: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 22)
                         .contentShape(Rectangle())
-                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(selection == value ? Color.primary.opacity(0.09) : Color.clear))
+                        .background { if selection == value { RaisedPlate(cornerRadius: 5) } }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(selection == value ? .primary : .secondary)
             }
         }
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.045)))
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.055)))
     }
 }
 
