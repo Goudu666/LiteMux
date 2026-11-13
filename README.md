@@ -77,6 +77,8 @@ Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `c
 
 点状态栏左下角的主机名，弹出这台机器的端口和 tmux 会话：TensorBoard、Jupyter、Gradio 这类正在监听的端口一键「转发并打开」（`ssh -O forward` 复用现有隧道，不用重新登录），也能手填端口；你自己起的 `train`、`bot` 之类 tmux 会话可以直接「接管」到一个标签页，不会套进 `lm_` 会话里。
 
+![主机弹窗：转发中的 TensorBoard、手填端口、可接管的 tmux 会话](docs/screenshots/host-tools.png)
+
 ## 快捷键
 
 | 快捷键 | 作用 |
