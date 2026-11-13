@@ -1,0 +1,181 @@
+name: UI smoke
+
+# Launches the real app against an SSH server on localhost and takes screenshots,
+# so terminal, tmux slots, SFTP file tree and the status bar are exercised end to end.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ui-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build LiteMux.app
+        run: ./scripts/bundle.sh
+
+      - name: SSH server on localhost
+        continue-on-error: true
+        run: |
+          brew install tmux >/dev/null 2>&1 || true
+          echo 'export PATH=/opt/homebrew/bin:$PATH' >> ~/.zshenv
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" > ~/.ssh/environment
+          echo "PermitUserEnvironment yes" | sudo tee /etc/ssh/sshd_config.d/100-litemux.conf
+          sudo systemsetup -f -setremotelogin on 2>/dev/null || sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist || true
+          ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519
+          cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+          ssh-keyscan -t ed25519 localhost >> ~/.ssh/known_hosts 2>/dev/null
+          cat > ~/.ssh/config <<EOF
+          Host *
+              ServerAliveInterval 30
+          Host lab1 lab1.local
+              HostName localhost
+              User $USER
+              IdentityFile ~/.ssh/id_ed25519
+          Host gpu-a100
+              HostName 10.255.0.12
+              User goudu
+              Port 2222
+          Host jp-proxy
+              HostName 203.0.113.7
+          EOF
+          ssh -o BatchMode=yes -o ConnectTimeout=5 lab1 'echo ssh-ok; command -v tmux'
+          # A running "training job" in the slot the first pane will attach to.
+          cat > ~/train.sh <<'EOF'
+          cd ~/exp 2>/dev/null || cd ~
+          for i in $(seq 1 40); do
+            printf "Epoch %2d/40  loss=0.%03d  acc=0.9%02d  lr=3e-4\n" "$i" $((RANDOM%900+100)) $((RANDOM%99))
+            sleep 0.05
+          done
+          exec zsh -l
+          EOF
+          ssh -o BatchMode=yes lab1 "/opt/homebrew/bin/tmux new-session -d -s lm_1 'bash ~/train.sh'" || true
+          mkdir -p ~/exp && printf 'seed: 42\nbatch_size: 64\nlr: 3e-4\nmodel:\n  name: vit_b16\n  pretrained: true\n' > ~/exp/config.yaml
+          echo "print('hello')" > ~/exp/train.py
+
+      - name: Seed workspace
+        run: |
+          mkdir -p ~/.config/litemux
+          python3 - <<'EOF'
+          import json, os, uuid
+          u = lambda: str(uuid.uuid4()).upper()
+          leaf = lambda host, slot: {"leaf": {"_0": {"id": u(), "hostID": host, "slot": slot}}}
+          tree = {"split": {"id": u(), "axis": "horizontal", "ratio": 0.56,
+                            "first": leaf("config:lab1", 1),
+                            "second": {"split": {"id": u(), "axis": "vertical", "ratio": 0.5,
+                                                 "first": leaf("config:lab1", 2),
+                                                 "second": leaf("local", 3)}}}}
+          bid = u()
+          state = {
+            "version": 1,
+            "appearance": "light",
+            "sidebarMode": "hosts",
+            "bookmarks": [{"id": bid, "name": "autodl-westb-38192",
+                           "endpoint": {"host": "connect.westb.seetacloud.com", "user": "root", "port": 38192, "options": []},
+                           "hasSavedPassword": False, "createdAt": "2026-11-13T00:00:00Z"}],
+            "tabs": [{"id": u(), "kind": {"terminal": {"_0": tree}}},
+                     {"id": u(), "kind": {"terminal": {"_0": leaf("local", 4)}}}],
+            "selectedTabIndex": 0,
+          }
+          json.dump(state, open(os.path.expanduser("~/.config/litemux/state.json"), "w"), indent=2)
+          EOF
+
+      - name: Launch and capture (light, hosts)
+        run: |
+          mkdir -p shots
+          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-light-hosts.log 2>&1 &
+          echo $! > app.pid
+          sleep 14
+          screencapture -x shots/light-hosts.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light-hosts.log; exit 1)
+          osascript -e 'tell application "System Events" to keystroke "q" using command down' 2>/dev/null || kill $(cat app.pid)
+          sleep 3; kill $(cat app.pid) 2>/dev/null || true
+          cat ~/.config/litemux/state.json | head -40
+
+      - name: Launch and capture (light, files)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["sidebarMode"] = "files"
+          s["lastDirectories"] = {"config:lab1": os.path.expanduser("~/exp")}
+          json.dump(s, open(p, "w"))
+          EOF
+          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-light-files.log 2>&1 &
+          echo $! > app.pid
+          sleep 14
+          screencapture -x shots/light-files.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light-files.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
+      - name: Launch and capture (dark, hosts)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["appearance"] = "dark"; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-dark.log 2>&1 &
+          echo $! > app.pid
+          sleep 12
+          screencapture -x shots/dark-hosts.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-dark.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          tail -20 shots/app-dark.log || true
+
+      - name: Launch and capture (colour themes)
+        run: |
+          for t in apricot mist sakura; do
+            python3 - "$t" <<'EOF'
+          import json, os, sys
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["appearance"] = "light"; s["colorTheme"] = sys.argv[1]; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+            ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-$t.log 2>&1 &
+            echo $! > app.pid
+            sleep 11
+            screencapture -x shots/theme-$t.png || true
+            kill -0 $(cat app.pid) && echo "$t: app alive" || (echo "APP EXITED"; cat shots/app-$t.log; exit 1)
+            kill $(cat app.pid) 2>/dev/null || true
+            sleep 2
+          done
+
+      # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
+      # them with git: `git fetch origin refs/ci/shots/<branch>`.
+      - name: Publish screenshots to refs/ci/shots/<branch>
+        if: always()
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd shots
+          git init -q
+          git add -A
+          git -c user.name="${{ github.actor }}" -c user.email="${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com" commit -qm "ui smoke screenshots"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}" HEAD:refs/ci/shots/${{ github.ref_name }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-smoke
+          path: shots/
+          retention-days: 7
