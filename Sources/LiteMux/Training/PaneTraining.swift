@@ -45,6 +45,10 @@ final class PaneTraining {
         let snapshot = view.terminalStateSnapshot()
         let rows = snapshot.visibleRows.map { ScreenRow(text: $0.text, isWrapped: $0.isWrapped) }
         let events = tracker.ingest(rows: rows, cols: snapshot.dimensions.cols)
+        if Self.trace {
+            let tail = rows.suffix(5).map { "[\($0.text.count)\($0.isWrapped ? "w" : "")] \($0.text)" }.joined(separator: "\n    ")
+            FileHandle.standardError.write(Data("scan cols=\(snapshot.dimensions.cols) rows=\(rows.count)\n    \(tail)\n".utf8))
+        }
         guard tracker.revision != lastRevision else { return }
         lastRevision = tracker.revision
         if Self.trace {
