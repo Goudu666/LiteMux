@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
                 if let frame = window.contentView?.superview { Self.dump(frame, depth: 0) }
+                fflush(stdout)
             }
         }
     }
