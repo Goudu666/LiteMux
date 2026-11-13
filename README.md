@@ -48,6 +48,10 @@ args = ["--mcp"]
 
 Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `command` / `args`（`mcpServers.litemux`）。
 
+| 接入面板 | 执行前确认 |
+| --- | --- |
+| ![](docs/screenshots/agent-bridge.png) | ![](docs/screenshots/bridge-confirm.png) |
+
 | 工具 | 作用 | 权限 |
 | --- | --- | --- |
 | `list_hosts` | 书签、`~/.ssh/config`、本机；是否已连接，每台机器上的 tmux 会话 | 读 |
