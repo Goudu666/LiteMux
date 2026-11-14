@@ -97,7 +97,7 @@ final class HostTools {
            !addrs.isEmpty, addrs.allSatisfy({ $0.contains(":") }) {
             f.remoteAddress = "[::1]"
         }
-        let args = ["-o", "ControlPath=\(app.hub.invocation.controlPath)", "-O", "forward", "-L", f.spec]
+        let args = ["-o", "ControlPath=\(app.hub.invocation.controlPath(for: endpoint))", "-O", "forward", "-L", f.spec]
             + endpoint.arguments(home: app.hub.invocation.home)
         let r = await ProcessRunner.run(SSHInvocation.sshPath, args, environment: app.hub.environment(for: host), timeout: 6)
         if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_HOSTTOOLS"] == "1" {
@@ -122,7 +122,7 @@ final class HostTools {
 
     func cancel(_ f: Forward, on host: HostEntry) async {
         guard let app, let endpoint = host.endpoint else { return }
-        let args = ["-o", "ControlPath=\(app.hub.invocation.controlPath)", "-O", "cancel", "-L", f.spec]
+        let args = ["-o", "ControlPath=\(app.hub.invocation.controlPath(for: endpoint))", "-O", "cancel", "-L", f.spec]
             + endpoint.arguments(home: app.hub.invocation.home)
         _ = await ProcessRunner.run(SSHInvocation.sshPath, args, environment: app.hub.environment(for: host), timeout: 6)
         forwards.removeAll { $0.id == f.id }

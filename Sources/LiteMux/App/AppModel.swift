@@ -2,7 +2,7 @@ import AppKit
 import Observation
 import LiteMuxCore
 
-enum SidebarMode: String { case hosts, files }
+enum SidebarMode: String { case hosts, files, agents }
 
 struct Toast: Identifiable, Equatable {
     enum Style { case info, success, error }
@@ -46,12 +46,19 @@ final class AppModel {
     let transfers = TransferCenter()
     let hostTools = HostTools()
     let gpuWatch = GPUIdleWatch()
+    /// What local coding agents are doing on servers.
+    let agents = AgentWatch()
+    /// hostID → a coding agent's ControlMaster socket LiteMux rides for that
+    /// host (in memory only; a relaunch goes back to LiteMux's own tunnel).
+    var adoptedSockets: [String: String] = [:]
 
     @ObservationIgnored private var sessions: [UUID: TerminalSession] = [:]
     @ObservationIgnored private let store = StateStore()
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored weak var window: NSWindow?
+    @ObservationIgnored var lastFocus: UserFocus?
+    @ObservationIgnored var focusSelectionCache: (key: String, line: Int, selection: UserFocus.Selection?)?
 
     init() {
         let loaded = store.load()
@@ -64,6 +71,7 @@ final class AppModel {
         files.app = self
         transfers.app = self
         hostTools.app = self
+        agents.app = self
         monitor.onSample = { [weak self] host, sample in self?.gpuWatch.observe(sample, host: host) }
         observeBridge()
         files.onPreferenceChange = { [weak self] in
@@ -105,8 +113,11 @@ final class AppModel {
                 self.previewImage(host: h, path: parts[1], size: 0)
             }
         }
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_AGENTWATCH"] == "1" { smokeAgentWatch() }
         applyAppearance()
         activeHostChanged()
+        agents.start()
+        startFocusWriter()
     }
 
     // MARK: - Hosts
@@ -115,6 +126,12 @@ final class AppModel {
     var sshConfigHosts: [HostEntry] { configHosts.map { HostEntry.from($0) } }
 
     func host(_ id: String) -> HostEntry? {
+        guard var h = baseHost(id) else { return nil }
+        if let socket = adoptedSockets[id], let ep = h.endpoint { h.endpoint = ep.riding(controlPath: socket) }
+        return h
+    }
+
+    private func baseHost(_ id: String) -> HostEntry? {
         if id == HostEntry.localID { return .local }
         if let b = state.bookmarks.first(where: { $0.hostID == id }) { return HostEntry.from(b) }
         if id.hasPrefix("config:") {
@@ -226,8 +243,8 @@ final class AppModel {
 
     /// Shows a tmux session in a tab of its own: `lm_<n>` as a LiteMux pane,
     /// anything else (`train`, `bot`) attached directly, never nested.
-    func openTmuxSession(_ session: String, host: HostEntry, select: Bool) {
-        if let (tab, p) = pane(showing: session, hostID: host.id) {
+    func openTmuxSession(_ session: String, host: HostEntry, select: Bool, readOnly: Bool = false) {
+        if let (tab, p) = pane(showing: session, hostID: host.id), !(p.readOnly == true && !readOnly) {
             if select {
                 selectTab(tab.id)
                 tab.focusedPaneID = p.id
@@ -235,8 +252,14 @@ final class AppModel {
             }
             return
         }
+        // Taking over a session that is only watched: replace the watching pane.
+        if let (tab, p) = pane(showing: session, hostID: host.id), p.readOnly == true, !readOnly {
+            closePane(p.id, in: tab)
+        }
         let pane: PaneSpec
-        if session.hasPrefix("lm_"), let n = Int(session.dropFirst(3)), !usedSlots(for: host.id).contains(n) {
+        if readOnly {
+            pane = PaneSpec(hostID: host.id, slot: nil, session: session, readOnly: true)
+        } else if session.hasPrefix("lm_"), let n = Int(session.dropFirst(3)), !usedSlots(for: host.id).contains(n) {
             pane = PaneSpec(hostID: host.id, slot: n)
         } else {
             pane = PaneSpec(hostID: host.id, slot: nil, session: session)
@@ -417,7 +440,7 @@ final class AppModel {
         if let doc = tab.editor { return doc.fileName }
         guard let pane = tab.focusedPane else { return "终端" }
         guard let h = host(pane.hostID) else { return "终端" }
-        if let named = pane.session { return "\(h.title) · \(named)" }
+        if let named = pane.session { return pane.readOnly == true ? "旁观 · \(h.title) · \(named)" : "\(h.title) · \(named)" }
         if !h.isLocal, autoTmux(for: h.id), let slot = pane.slot {
             return "\(h.title) · \(SSHInvocation.sessionName(slot: slot))"
         }
@@ -748,6 +771,8 @@ final class AppModel {
             }
         }
         saveNow()
+        writeFocus(running: false, force: true)
+        agents.stop()
         monitor.stop()
         for s in sessions.values { s.terminate() }
         sessions.removeAll()

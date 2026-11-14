@@ -9,6 +9,8 @@ public struct BridgeToolbox: Sendable {
     /// Called after `send_to_terminal` opened a new `lm_<n>` session, so a
     /// running LiteMux can show it as a pane.
     public var onNewSession: (@Sendable (HostEntry, String) -> Void)?
+    /// What the user is looking at in LiteMux (`focus.json`).
+    public var focus: @Sendable () -> UserFocus? = { UserFocus.load() }
 
     public init(shell: BridgeShell, directory: @escaping @Sendable () -> BridgeHostDirectory,
                 localDirectory: String = FileManager.default.currentDirectoryPath,
@@ -20,7 +22,7 @@ public struct BridgeToolbox: Sendable {
     }
 
     public var tools: [BridgeTool] {
-        [listHosts, readTerminal, trainingStatus, hostStatus, listDirectory, readFile, downloadFile,
+        [listHosts, userFocus, readTerminal, trainingStatus, hostStatus, listDirectory, readFile, downloadFile,
          runCommand, sendToTerminal, writeFile, editFile, uploadFile]
     }
 
@@ -146,6 +148,25 @@ public struct BridgeToolbox: Sendable {
                 }
             }
             return BridgeToolResult("LiteMux 主机（● 已连接）\n" + lines.joined(separator: "\n"))
+        }
+    }
+
+    var userFocus: BridgeTool {
+        BridgeTool(
+            name: "get_user_focus", title: "用户在看什么",
+            description: "What the user is looking at in LiteMux right now: the focused tab (a terminal pane and its tmux session, or an open file with the cursor line and the selected text), the folder open in the file tree, and other open files. Call it when the user says \"this file\", \"the selected code\", \"this pane\" or \"what I'm looking at\" instead of asking them to paste it.",
+            access: .read, inputSchema: Self.schema([:])
+        ) { call in
+            guard let focus = self.focus() else {
+                call.summary = "无记录"
+                throw BridgeToolError("LiteMux 还没有记录过焦点。请先打开 LiteMux，切到要讨论的文件或终端。")
+            }
+            switch focus.view {
+            case "editor": call.summary = focus.file.map { RemotePath.lastComponent($0.path) } ?? "编辑器"
+            case "terminal": call.summary = focus.pane?.session ?? "终端"
+            default: call.summary = "空"
+            }
+            return BridgeToolResult(focus.describe())
         }
     }
 
