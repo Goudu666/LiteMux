@@ -238,7 +238,7 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
                     refineProxyDiagnosis(endpoint)
                 }
             }
-            message = diagnosis?.title ?? (ranFor < 8 ? "无法连接或认证失败" : "连接已断开")
+            message = ranFor < 30 && diagnosis != nil ? "连接失败，原因见下方" : (ranFor < 8 ? "无法连接或认证失败" : "连接已断开")
             hub?.markOffline(host.id)
         } else {
             message = "会话已结束"
