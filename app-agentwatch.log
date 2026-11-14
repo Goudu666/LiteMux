@@ -1,0 +1,13 @@
+smoke: agents live=1 others=0 tunnels=0 recent=6
+  live: ["Claude Code→lab1 host=config:lab1 socket=/tmp/agent-cm-runner@localhost:22 tmux=[\"agent-train\"] cmd=bash ~/train2.sh"]
+  tunnels: []
+  recent: ["Claude Code transcript lab1 cd ~/exp && python3 eval.py --split val --save-masks", "Claude Code transcript root@connect.westb.seetacloud.com df -h /root/autodl-tmp", "Claude Code transcript lab1 scp ~/exp/mask_0001.png → outputs", "Codex transcript ubuntu@10.0.0.8 ls ~/datasets/coco", "Claude Code transcript lab1 cd ~/exp && tail -n 4 train.log", "Claude Code transcript lab1 nvidia-smi --query-gpu=name,utilization.gpu,memory.used --fo"]
+smoke: agents live=1 others=0 tunnels=0 recent=6
+  live: ["Claude Code→lab1 host=config:lab1 socket=/tmp/agent-cm-runner@localhost:22 tmux=[\"agent-train\"] cmd=bash ~/train2.sh"]
+  tunnels: []
+  recent: ["Claude Code transcript lab1 cd ~/exp && python3 eval.py --split val --save-masks", "Claude Code transcript root@connect.westb.seetacloud.com df -h /root/autodl-tmp", "Claude Code transcript lab1 scp ~/exp/mask_0001.png → outputs", "Codex transcript ubuntu@10.0.0.8 ls ~/datasets/coco", "Claude Code transcript lab1 cd ~/exp && tail -n 4 train.log", "Claude Code transcript lab1 nvidia-smi --query-gpu=name,utilization.gpu,memory.used --fo"]
+smoke: watching lab1 tmux=["agent-train"]
+smoke: adopted ["config:lab1": "/tmp/agent-cm-runner@localhost:22"] tab=旁观 · lab1 · agent-train
+smoke: focus 用户正在看 lab1 的终端，tmux 会话 agent-train（read_terminal 可读），只读旁观中
+
+文件树：lab1:/Users/runner/exp

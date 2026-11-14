@@ -1,0 +1,244 @@
+scan cols=54 rows=38
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [54] [lm_1] 0:tmux* "iad20-fj920-f3d646db-" 19:37 14-Nov-26
+pulse rev=0 epoch=-1.0 status=nil events=[]
+scan cols=42 rows=19
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [42] [lm_2] 20-fj920-f3d646db-" 19:37 14-Nov-26
+pulse rev=0 epoch=-1.0 status=nil events=[]
+scan cols=42 rows=19
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+pulse rev=0 epoch=-1.0 status=nil events=[]
+scan cols=54 rows=38
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=6 epoch=6.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[LiteMuxCore.TrainingEvent.started]
+scan cols=54 rows=38
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=14 epoch=14.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.7126  lr=2.3e-04
+    [54] Epoch 21/60  loss=0.8671  acc=0.7396  val_loss=1.0317 
+    [27w]  val_acc=0.7148  lr=2.2e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=21 epoch=21.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.7885  lr=1.7e-04
+    [54] Epoch 29/60  loss=0.6138  acc=0.8416  val_loss=0.7208 
+    [27w]  val_acc=0.8126  lr=1.6e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=29 epoch=29.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.8644  lr=1.0e-04
+    [54] Epoch 37/60  loss=0.4367  acc=0.8968  val_loss=0.5560 
+    [27w]  val_acc=0.8603  lr=9.6e-05
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=37 epoch=37.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.8966  lr=5.0e-05
+    [54] Epoch 45/60  loss=0.3417  acc=0.9440  val_loss=0.4482 
+    [27w]  val_acc=0.9122  lr=4.4e-05
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=45 epoch=45.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27w]  val_acc=0.9378  lr=1.3e-05
+    [54] Epoch 53/60  loss=0.2737  acc=0.9544  val_loss=0.3321 
+    [27w]  val_acc=0.9282  lr=1.0e-05
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=53 epoch=53.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.2594  lr=3.0e-04
+    [54w] Epoch  3/60  loss=1.7868  acc=0.3599  val_loss=2.0260 
+    [27w]  val_acc=0.3326  lr=3.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=63 epoch=3.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[LiteMuxCore.TrainingEvent.finished, LiteMuxCore.TrainingEvent.started]
+scan cols=54 rows=38
+    [27]  val_acc=0.3326  lr=3.0e-04
+    [54w] Epoch  4/60  loss=1.6123  acc=0.4227  val_loss=1.8305 
+    [27w]  val_acc=0.3947  lr=3.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=64 epoch=4.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.3947  lr=3.0e-04
+    [54w] Epoch  5/60  loss=1.4973  acc=0.4860  val_loss=1.6904 
+    [27w]  val_acc=0.4494  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=65 epoch=5.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.4494  lr=2.9e-04
+    [54w] Epoch  6/60  loss=1.3805  acc=0.5302  val_loss=1.5800 
+    [27w]  val_acc=0.4967  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=66 epoch=6.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.4967  lr=2.9e-04
+    [54w] Epoch  7/60  loss=1.2667  acc=0.5925  val_loss=1.4492 
+    [27w]  val_acc=0.5677  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=67 epoch=7.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.5677  lr=2.9e-04
+    [54w] Epoch  8/60  loss=1.1461  acc=0.6334  val_loss=1.2950 
+    [27w]  val_acc=0.6118  lr=2.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=68 epoch=8.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6118  lr=2.9e-04
+    [54w] Epoch  9/60  loss=1.1009  acc=0.6702  val_loss=1.2601 
+    [27w]  val_acc=0.6444  lr=2.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=69 epoch=9.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6444  lr=2.8e-04
+    [54w] Epoch 10/60  loss=1.0100  acc=0.6974  val_loss=1.1500 
+    [27w]  val_acc=0.6762  lr=2.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=70 epoch=10.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6762  lr=2.8e-04
+    [54w] Epoch 11/60  loss=0.9005  acc=0.7242  val_loss=1.0657 
+    [27w]  val_acc=0.6861  lr=2.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=71 epoch=11.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.6861  lr=2.8e-04
+    [54w] Epoch 12/60  loss=0.8525  acc=0.7634  val_loss=0.9712 
+    [27w]  val_acc=0.7243  lr=2.7e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=72 epoch=12.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.7243  lr=2.7e-04
+    [54w] Epoch 13/60  loss=0.7814  acc=0.7829  val_loss=0.9162 
+    [27w]  val_acc=0.7569  lr=2.7e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=73 epoch=13.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.7569  lr=2.7e-04
+    [54w] Epoch 14/60  loss=0.7251  acc=0.7969  val_loss=0.8309 
+    [27w]  val_acc=0.7684  lr=2.6e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=74 epoch=14.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.7684  lr=2.6e-04
+    [54w] Epoch 15/60  loss=0.6601  acc=0.8213  val_loss=0.7641 
+    [27w]  val_acc=0.7895  lr=2.6e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=75 epoch=15.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=42 rows=19
+    [0] 
+    [0] 
+    [0] 
+    [0] 
+    [42] [lm_2] 20-fj920-f3d646db-" 19:38 14-Nov-26
+scan cols=54 rows=38
+    [27]  val_acc=0.7895  lr=2.6e-04
+    [54w] Epoch 16/60  loss=0.5945  acc=0.8480  val_loss=0.7010 
+    [27w]  val_acc=0.8229  lr=2.5e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=76 epoch=16.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8229  lr=2.5e-04
+    [54w] Epoch 17/60  loss=0.6047  acc=0.8678  val_loss=0.7421 
+    [27w]  val_acc=0.8308  lr=2.4e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=77 epoch=17.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8308  lr=2.4e-04
+    [54w] Epoch 18/60  loss=0.5575  acc=0.8646  val_loss=0.6489 
+    [27w]  val_acc=0.8310  lr=2.4e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=78 epoch=18.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8310  lr=2.4e-04
+    [54w] Epoch 19/60  loss=0.5302  acc=0.8790  val_loss=0.6548 
+    [27w]  val_acc=0.8498  lr=2.3e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=79 epoch=19.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8498  lr=2.3e-04
+    [54w] Epoch 20/60  loss=0.4474  acc=0.8883  val_loss=0.5250 
+    [27w]  val_acc=0.8553  lr=2.3e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=80 epoch=20.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8553  lr=2.3e-04
+    [54w] Epoch 21/60  loss=0.4283  acc=0.8994  val_loss=0.5222 
+    [27w]  val_acc=0.8756  lr=2.2e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=81 epoch=21.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8756  lr=2.2e-04
+    [54w] Epoch 22/60  loss=0.4285  acc=0.9239  val_loss=0.5367 
+    [27w]  val_acc=0.8880  lr=2.1e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=82 epoch=22.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8880  lr=2.1e-04
+    [54w] Epoch 23/60  loss=0.3902  acc=0.9314  val_loss=0.5021 
+    [27w]  val_acc=0.8945  lr=2.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=83 epoch=23.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.8945  lr=2.0e-04
+    [54w] Epoch 24/60  loss=0.3740  acc=0.9330  val_loss=0.4817 
+    [27w]  val_acc=0.9036  lr=2.0e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=84 epoch=24.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.9036  lr=2.0e-04
+    [54w] Epoch 25/60  loss=0.3448  acc=0.9361  val_loss=0.4342 
+    [27w]  val_acc=0.9145  lr=1.9e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=85 epoch=25.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
+scan cols=54 rows=38
+    [27]  val_acc=0.9145  lr=1.9e-04
+    [54w] Epoch 26/60  loss=0.3245  acc=0.9520  val_loss=0.3904 
+    [27w]  val_acc=0.9151  lr=1.8e-04
+    [0] 
+    [54] [lm_1] 0:bash* "iad20-fj920-f3d646db-" 19:38 14-Nov-26
+pulse rev=86 epoch=26.0 status=Optional(LiteMuxCore.TrainingRun.Status.running) events=[]
