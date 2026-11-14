@@ -202,7 +202,8 @@ final class LocalAgentTests: XCTestCase {
         """
         let p = ProcessTable.parse(out)
         XCTAssertEqual(p.count, 3)
-        XCTAssertEqual(p[0].elapsed, 3 * 86_400 + 4 * 3600 + 5 * 60 + 6)
+        let threeDays: TimeInterval = 3 * 86_400 + 4 * 3600 + 5 * 60 + 6
+        XCTAssertEqual(p[0].elapsed, threeDays)
         XCTAssertEqual(p[1].elapsed, 62)
         XCTAssertEqual(p[2].ppid, 501)
         XCTAssertEqual(p[2].executableName, "ssh")

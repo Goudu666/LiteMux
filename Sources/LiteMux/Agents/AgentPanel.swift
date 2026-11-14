@@ -189,6 +189,7 @@ private struct RowShell<Content: View>: View {
     }
 }
 
+@MainActor
 enum AgentFormat {
     static func elapsed(_ t: TimeInterval) -> String {
         let s = Int(t)
