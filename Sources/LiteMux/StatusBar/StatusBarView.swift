@@ -5,22 +5,23 @@ import LiteMuxCore
 struct StatusBarView: View {
     let monitor: StatusMonitor
     let transfers: TransferCenter
+    var training: PaneTraining?
+    @Binding var showPulse: Bool
+    var model: AppModel
+    @Binding var showHostTools: Bool
+    @State private var hoveringHost = false
 
     var body: some View {
         let s = monitor.sample
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                StatusDot(online: monitor.health == .online, warning: monitor.health == .connecting)
-                Text(monitor.hostTitle.isEmpty ? "LiteMux" : monitor.hostTitle)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                if let ms = s.latencyMs {
-                    Text("\(Int(ms.rounded()))ms").foregroundStyle(.secondary)
-                } else if let note = healthNote {
-                    Text(note).foregroundStyle(.secondary).lineLimit(1)
+            hostButton(sample: s)
+
+            if let training, training.hasCurves {
+                HStack(spacing: 0) {
+                    Separator()
+                    PulseChip(training: training, showPanel: $showPulse).padding(.horizontal, 4)
                 }
             }
-            .padding(.trailing, 4)
 
             if let cpu = s.cpuPercent {
                 Cell { Text("CPU ").foregroundStyle(.secondary) + Text(String(format: "%.0f%%", cpu)).foregroundColor(level(cpu / 100)) }
@@ -50,7 +51,7 @@ struct StatusBarView: View {
             if let t = transfers.active.first {
                 HStack(spacing: 5) {
                     Image(systemName: t.direction == .upload ? "arrow.up" : "arrow.down").font(.system(size: 8.5, weight: .bold))
-                    Text("\(transfers.active.count) 项传输 · \(Int(t.fraction * 100))%")
+                    Text("\(transfers.active.count) 项传输 · " + (t.total > 0 ? "\(Int(t.fraction * 100))%" : t.done.compactByteString))
                 }
                 .foregroundStyle(.secondary)
                 .padding(.trailing, 10)
@@ -61,6 +62,47 @@ struct StatusBarView: View {
         .frame(height: 24)
         .background(Theme.chromeColor)
         .hairline(.top)
+    }
+
+    /// The host name; for a remote host it opens tunnels and tmux sessions.
+    @ViewBuilder
+    private func hostButton(sample s: ServerSample) -> some View {
+        let host = monitor.hostID.flatMap { model.host($0) }
+        let label = HStack(spacing: 6) {
+            StatusDot(online: monitor.health == .online, warning: monitor.health == .connecting)
+            Text(monitor.hostTitle.isEmpty ? "LiteMux" : monitor.hostTitle)
+                .fontWeight(.medium)
+                .lineLimit(1)
+            if let ms = s.latencyMs {
+                Text("\(Int(ms.rounded()))ms").foregroundStyle(.secondary)
+            } else if let note = healthNote {
+                Text(note).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if let host, !host.isLocal {
+                let n = model.hostTools.forwards(for: host.id).count
+                if n > 0 {
+                    Text("⇄\(n)").foregroundStyle(Theme.accentColor).help("\(n) 个端口转发")
+                }
+                Image(systemName: "chevron.up").font(.system(size: 7, weight: .bold)).foregroundStyle(.tertiary)
+            }
+        }
+        if let host, !host.isLocal {
+            Button { showHostTools.toggle() } label: {
+                label.padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(hoveringHost || showHostTools ? 0.07 : 0)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hoveringHost = $0 }
+            .help("端口转发与 tmux 会话")
+            .popover(isPresented: $showHostTools, arrowEdge: .top) {
+                HostToolsView(tools: model.hostTools, host: host, app: model)
+            }
+            .padding(.leading, -5)
+            .padding(.trailing, 0)
+        } else {
+            label.padding(.trailing, 4)
+        }
     }
 
     private var healthNote: String? {

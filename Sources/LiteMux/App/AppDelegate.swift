@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     // MARK: Menu actions
 
     @objc func newConnection(_ sender: Any?) { model.presentNewConnection() }
+    @objc func showAgentBridge(_ sender: Any?) { model.showAgentBridge = true }
     @objc func newTab(_ sender: Any?) { model.newTerminalTab() }
     @objc func newLocalTab(_ sender: Any?) { model.openTerminalTab(host: .local) }
     @objc func closeFocused(_ sender: Any?) { model.closeFocused() }
@@ -67,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func toggleLiteSidebar(_ sender: Any?) { model.toggleSidebar() }
     @objc func showHosts(_ sender: Any?) { model.setSidebarMode(.hosts) }
     @objc func showFiles(_ sender: Any?) { model.setSidebarMode(.files) }
+    @objc func showAgents(_ sender: Any?) { model.setSidebarMode(.agents) }
     @objc func nextTab(_ sender: Any?) { model.selectTab(offset: 1) }
     @objc func previousTab(_ sender: Any?) { model.selectTab(offset: -1) }
     @objc func selectTabNumber(_ sender: NSMenuItem) { model.selectTab(number: sender.tag) }
@@ -142,6 +144,8 @@ enum MainMenu {
         _ = submenu(appName, [
             item("关于 \(appName)", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), "", [], chain: true),
             .separator(),
+            item("接入 Coding Agent…", #selector(AppDelegate.showAgentBridge(_:)), "", []),
+            .separator(),
             item("隐藏 \(appName)", #selector(NSApplication.hide(_:)), "h", chain: true),
             item("隐藏其他", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option], chain: true),
             item("全部显示", #selector(NSApplication.unhideAllApplications(_:)), "", [], chain: true),
@@ -187,6 +191,7 @@ enum MainMenu {
             item("隐藏侧边栏", #selector(AppDelegate.toggleLiteSidebar(_:)), "b"),
             item("主机", #selector(AppDelegate.showHosts(_:)), "1", [.command, .option]),
             item("文件", #selector(AppDelegate.showFiles(_:)), "2", [.command, .option]),
+            item("Agent 同屏", #selector(AppDelegate.showAgents(_:)), "3", [.command, .option]),
             item("刷新文件树", #selector(AppDelegate.refreshFiles(_:)), "r"),
             .separator(),
             item("左右分屏", #selector(AppDelegate.splitHorizontally(_:)), "d"),

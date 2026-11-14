@@ -16,7 +16,8 @@ struct SidebarView: View {
             .frame(height: titlebarHeight)
             .background(WindowDragArea())
 
-            SegmentedSwitch(options: [(SidebarMode.hosts, "主机"), (SidebarMode.files, "文件")],
+            SegmentedSwitch(options: [(SidebarMode.hosts, "主机"), (SidebarMode.files, "文件"),
+                                      (SidebarMode.agents, model.agents.live.isEmpty ? "Agent" : "Agent \(model.agents.live.count)")],
                             selection: Binding(get: { model.sidebarMode }, set: { model.setSidebarMode($0) }))
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
@@ -24,6 +25,7 @@ struct SidebarView: View {
             switch model.sidebarMode {
             case .hosts: HostsList(model: model)
             case .files: FileTreeView(model: model, browser: model.files)
+            case .agents: AgentPanel(model: model, watch: model.agents)
             }
         }
         .background(ZStack { VisualEffectBackground(material: .sidebar); Theme.sidebarTintColor })
@@ -359,6 +361,7 @@ struct FileMenu: View {
         }
         if let entry, entry.behavesAsDirectory {
             Button("进入此目录") { browser.enter(entry) }
+            Button("下载整个文件夹到“下载”") { browser.download(entry) }
         }
         Button("在此目录打开新终端") { browser.openTerminal(at: dir) }
         Divider()

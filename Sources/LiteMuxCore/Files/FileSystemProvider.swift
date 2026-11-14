@@ -3,8 +3,19 @@ import Foundation
 public typealias TransferProgress = @Sendable (_ done: UInt64, _ total: UInt64) -> Void
 
 /// The file operations the sidebar and editor need, local or remote.
+/// Size and modification time: enough to notice that someone else changed a file.
+public struct FileStamp: Equatable, Sendable {
+    public var size: UInt64?
+    public var modified: Date?
+    public init(size: UInt64?, modified: Date?) {
+        self.size = size
+        self.modified = modified
+    }
+}
+
 public protocol FileSystemProvider: AnyObject, Sendable {
     func homeDirectory() async throws -> String
+    func stamp(of path: String) async throws -> FileStamp
     func list(_ path: String) async throws -> [FileEntry]
     func size(of path: String) async throws -> UInt64
     func readFile(_ path: String) async throws -> Data
@@ -55,6 +66,11 @@ public final class LocalFileSystem: FileSystemProvider, @unchecked Sendable {
     public func size(of path: String) async throws -> UInt64 {
         let a = try fm.attributesOfItem(atPath: path)
         return (a[.size] as? NSNumber)?.uint64Value ?? 0
+    }
+
+    public func stamp(of path: String) async throws -> FileStamp {
+        let a = try fm.attributesOfItem(atPath: path)
+        return FileStamp(size: (a[.size] as? NSNumber)?.uint64Value, modified: a[.modificationDate] as? Date)
     }
 
     public func readFile(_ path: String) async throws -> Data {
@@ -134,6 +150,11 @@ public final class SFTPFileSystem: FileSystemProvider, @unchecked Sendable {
     public func list(_ path: String) async throws -> [FileEntry] { try await client.listDirectory(path) }
 
     public func size(of path: String) async throws -> UInt64 { try await client.stat(path).size ?? 0 }
+
+    public func stamp(of path: String) async throws -> FileStamp {
+        let a = try await client.stat(path)
+        return FileStamp(size: a.size, modified: a.modifyTime.map { Date(timeIntervalSince1970: TimeInterval($0)) })
+    }
 
     public func readFile(_ path: String) async throws -> Data { try await client.readFile(path) }
 

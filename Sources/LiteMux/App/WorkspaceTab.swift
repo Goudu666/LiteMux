@@ -11,8 +11,15 @@ final class EditorDocument {
     private(set) var savedText: String
     var isSaving = false
     var lastError: String?
+    /// Size and mtime on the server when last loaded or saved, to catch
+    /// someone else's edit before ours overwrites it.
+    var stamp: FileStamp?
     /// Bumped when the text is replaced from outside the text view (load/revert).
     private(set) var revision = 0
+    /// The text view's selection (UTF-16), for "what the user is looking at".
+    @ObservationIgnored var selection = NSRange(location: 0, length: 0)
+    /// Bumped on every keystroke.
+    @ObservationIgnored var edits = 0
 
     init(hostID: String, path: String, text: String) {
         self.hostID = hostID

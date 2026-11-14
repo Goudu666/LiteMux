@@ -58,17 +58,54 @@ jobs:
           EOF
           ssh -o BatchMode=yes -o ConnectTimeout=5 lab1 'echo ssh-ok; command -v tmux'
           # A running "training job" in the slot the first pane will attach to.
+          # A fake but realistic run: decaying loss, rising accuracy, cosine lr.
+          # Usage: train.sh <epochs> <seconds per epoch> <decay>
+          cat > ~/epochs.sh <<'EOF'
+          n=$1; pause=$2; tau=$3
+          for i in $(seq 1 "$n"); do
+            awk -v i="$i" -v n="$n" -v t="$tau" -v s="$RANDOM" 'BEGIN { srand(s)
+              l = 2.2*exp(-i/t) + 0.08 + rand()*0.06; v = l*1.1 + 0.03 + rand()*0.05
+              a = 1 - 0.9*exp(-i/(t*0.8)) - rand()*0.02
+              printf "Epoch %2d/%d  loss=%.4f  acc=%.4f  val_loss=%.4f  val_acc=%.4f  lr=%.1e\n", i, n, l, a, v, a-0.02-rand()*0.02, 3e-4*0.5*(1+cos(3.14159*i/n)) }'
+            sleep "$pause"
+          done
+          EOF
           cat > ~/train.sh <<'EOF'
           cd ~/exp 2>/dev/null || cd ~
-          for i in $(seq 1 40); do
-            printf "Epoch %2d/40  loss=0.%03d  acc=0.9%02d  lr=3e-4\n" "$i" $((RANDOM%900+100)) $((RANDOM%99))
-            sleep 0.05
-          done
+          bash ~/epochs.sh 40 0.05 12
+          exec zsh -l
+          EOF
+          # Pulse screenshot: a finished first run (drawn as a ghost), then a live second run.
+          cat > ~/train2.sh <<'EOF'
+          cd ~/exp 2>/dev/null || cd ~
+          sleep 6
+          echo '$ python train.py --lr 1e-3'; bash ~/epochs.sh 60 0.04 20
+          echo '$ python train.py --lr 3e-4 --warmup 5'; bash ~/epochs.sh 60 0.45 11
           exec zsh -l
           EOF
           ssh -o BatchMode=yes lab1 "/opt/homebrew/bin/tmux new-session -d -s lm_1 'bash ~/train.sh'" || true
           mkdir -p ~/exp && printf 'seed: 42\nbatch_size: 64\nlr: 3e-4\nmodel:\n  name: vit_b16\n  pretrained: true\n' > ~/exp/config.yaml
           echo "print('hello')" > ~/exp/train.py
+          # An 8-bit label map (class ids 0-4), the kind that looks black in Preview.
+          python3 - <<'EOF'
+          import os, struct, zlib, math
+          w, h = 384, 256
+          rows = []
+          for y in range(h):
+              row = bytearray([0])
+              for x in range(w):
+                  v = 0
+                  if y > 170: v = 1                                          # road
+                  if (x - 110) ** 2 + (y - 120) ** 2 < 55 ** 2: v = 2         # car
+                  if 230 < x < 300 and 60 < y < 200: v = 3                     # person
+                  if y < 70 and x > 20 and math.sin(x / 18.0) * 12 + 40 > y: v = 4  # tree
+                  row.append(v)
+              rows.append(bytes(row))
+          raw = zlib.compress(b"".join(rows), 9)
+          def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+          png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0)) + chunk(b"IDAT", raw) + chunk(b"IEND", b"")
+          open(os.path.expanduser("~/exp/mask_0001.png"), "wb").write(png)
+          EOF
 
       - name: Seed workspace
         run: |
@@ -123,6 +160,172 @@ jobs:
           sleep 14
           screencapture -x shots/light-files.png || true
           kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-light-files.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
+      - name: Launch and capture (light, Training Pulse)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          ssh -o BatchMode=yes lab1 "/opt/homebrew/bin/tmux kill-session -t lm_1; /opt/homebrew/bin/tmux new-session -d -s lm_1 'bash ~/train2.sh'" || true
+          LITEMUX_SMOKE_PULSE=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-pulse.log 2>&1 &
+          echo $! > app.pid
+          sleep 17
+          screencapture -x shots/light-pulse.png || true
+          sleep 4
+          screencapture -x shots/light-pulse-2.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-pulse.log; exit 1)
+          tail -40 shots/app-pulse.log
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
+      # The local coding-agent interface: drive `LiteMux --mcp` like Claude Code
+      # would, against the real sshd + tmux, while lm_1 is still training.
+      - name: LiteMux Bridge (MCP) end to end
+        run: |
+          set -o pipefail
+          export LITEMUX_SMOKE_BRIDGE=1
+          python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 2>&1 | tee shots/bridge-e2e.txt
+          python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 --confirm-shot shots/bridge-confirm.png 2>&1 | tee -a shots/bridge-e2e.txt || true
+          tail -n 5 ~/.config/litemux/bridge-activity.jsonl || true
+
+      # Tunnels and tmux sessions behind the host name: a fake TensorBoard on
+      # 6006 (taken locally too, so the tunnel lands on 6007) and the "train"
+      # session the bridge smoke left running.
+      - name: Launch and capture (light, host tools + port forward)
+        run: |
+          # The runner's application firewall silently holds connections to an
+          # unsigned python (even on loopback), so the fake TensorBoard is the
+          # Apple-signed /usr/bin/nc answering one request at a time.
+          body="$(ls ~/exp)"
+          ( while true; do
+              printf 'HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s' "${#body}" "$body" \
+                | /usr/bin/nc -l 6006 > /dev/null 2>&1 || sleep 0.2
+            done ) &
+          echo $! > web.pid
+          LITEMUX_SMOKE_HOSTTOOLS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-hosttools.log 2>&1 &
+          echo $! > app.pid
+          sleep 14
+          screencapture -x shots/light-hosttools.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-hosttools.log; exit 1)
+          port=$(grep -o 'smoke: forward [0-9-]*' shots/app-hosttools.log | awk '{print $3}')
+          echo "forwarded to local port: $port"
+          lsof -nP -iTCP:"$port" -sTCP:LISTEN || true
+          curl -sS -m 3 -o /dev/null -w "direct 6006: %{http_code}\n" http://127.0.0.1:6006/ || true
+          curl -sS -m 5 "http://127.0.0.1:$port/" 2>&1 | head -n 12 | tee shots/forward.txt
+          kill $(cat app.pid) 2>/dev/null || true
+          kill $(cat web.pid) 2>/dev/null || true
+          pkill -f "nc -l 6006" 2>/dev/null || true
+          sleep 2
+          grep -q "config.yaml" shots/forward.txt && echo "PORT FORWARD OK" || (echo "PORT FORWARD FAILED"; grep smoke shots/app-hosttools.log; tail -30 shots/app-hosttools.log; exit 1)
+
+      - name: Launch and capture (light, agent sheet)
+        run: |
+          LITEMUX_SMOKE_AGENTS=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-agents.log 2>&1 &
+          echo $! > app.pid
+          sleep 12
+          screencapture -x shots/light-agents.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-agents.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+
+      # Agent 同屏: a pretend Claude Code (a script named `claude`) runs a long
+      # ssh through its own ControlMaster and starts a tmux session; pretend
+      # Claude Code and Codex session logs list a few more calls. LiteMux has
+      # no lab1 pane open, so watching must ride the agent's tunnel.
+      - name: Launch and capture (light, Agent watch)
+        run: |
+          # LiteMux's own masters from earlier steps must be gone, so the app has to ride the agent's tunnel.
+          for s in ~/.ssh/lm/*; do [ -S "$s" ] && ssh -o ControlPath="$s" -O exit lab1 2>/dev/null || true; done
+          # The Bridge e2e calls above would crowd the history list; keep them aside for this shot.
+          mv ~/.config/litemux/bridge-activity.jsonl /tmp/bridge-activity.jsonl 2>/dev/null || true
+          mkdir -p ~/fake-agent
+          cat > ~/fake-agent/claude <<'EOF'
+          #!/bin/bash
+          ssh -o ControlMaster=auto -o ControlPath=/tmp/agent-cm-%r@%h:%p -o ControlPersist=900 -o BatchMode=yes lab1 \
+            "cd ~/exp && /opt/homebrew/bin/tmux new-session -d -s agent-train 'bash ~/train2.sh' ; sleep 900"
+          EOF
+          chmod +x ~/fake-agent/claude
+          ( ~/fake-agent/claude > /tmp/fake-agent.log 2>&1 & )
+          sleep 4
+          echo "--- ssh processes as ps shows them"
+          ps -axww -o pid,ppid,etime,command | grep -E '[s]sh|[c]laude' || true
+          ls -la /tmp/agent-cm-* || true
+          ssh -G -o ControlPath=/tmp/agent-cm-%r@%h:%p lab1 | grep -iE '^(hostname|user|port|controlpath|controlmaster) ' || true
+          python3 - <<'EOF'
+          import datetime, json, os
+          now = datetime.datetime.now(datetime.timezone.utc)
+          ts = lambda s: (now - datetime.timedelta(seconds=s)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+          home = os.path.expanduser("~")
+          d = f"{home}/.claude/projects/-Users-runner-yolo"
+          os.makedirs(d, exist_ok=True)
+          rows = []
+          def call(i, t, cmd, desc, out, err=False):
+              rows.append({"type": "assistant", "timestamp": ts(t), "cwd": f"{home}/yolo", "message": {"role": "assistant",
+                           "content": [{"type": "tool_use", "id": f"toolu_{i}", "name": "Bash", "input": {"command": cmd, "description": desc}}]}})
+              if out is not None:
+                  rows.append({"type": "user", "timestamp": ts(t - 2), "message": {"role": "user",
+                               "content": [{"type": "tool_result", "tool_use_id": f"toolu_{i}", "content": out, "is_error": err}]}})
+          call(1, 420, "ssh lab1 'nvidia-smi --query-gpu=name,utilization.gpu,memory.used --format=csv'", "Check GPU load on lab1",
+               "name, utilization.gpu [%], memory.used [MiB]\nNVIDIA A100-SXM4-80GB, 97 %, 61234 MiB")
+          call(2, 300, 'ssh lab1 "cd ~/exp && tail -n 4 train.log"', "Read the end of the training log",
+               "Epoch 37/40  loss=0.0921  acc=0.9712\nEpoch 38/40  loss=0.0907  acc=0.9718\nEpoch 39/40  loss=0.0899  acc=0.9721\nEpoch 40/40  loss=0.0893  acc=0.9725")
+          call(3, 200, "scp lab1:~/exp/mask_0001.png ./outputs/", "Download a predicted mask to compare", "")
+          call(4, 140, "ssh -p 38192 root@connect.westb.seetacloud.com 'df -h /root/autodl-tmp'", "Check free space on the AutoDL box",
+               "Exit code 255\nssh: connect to host connect.westb.seetacloud.com port 38192: Operation timed out", True)
+          call(5, 25, 'ssh lab1 "cd ~/exp && python3 eval.py --split val --save-masks"', "Evaluate the checkpoint on the val split", None)
+          open(f"{d}/0b7c3e1a-smoke.jsonl", "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+          c = f"{home}/.codex/sessions/{now:%Y/%m/%d}"
+          os.makedirs(c, exist_ok=True)
+          lines = [{"timestamp": ts(260), "type": "session_meta", "payload": {"id": "s", "cwd": f"{home}/seg"}},
+                   {"timestamp": ts(250), "type": "response_item", "payload": {"type": "function_call", "name": "shell", "call_id": "call_1",
+                    "arguments": json.dumps({"command": ["bash", "-lc", "ssh ubuntu@10.0.0.8 'ls ~/datasets/coco'"], "workdir": f"{home}/seg"})}},
+                   {"timestamp": ts(248), "type": "response_item", "payload": {"type": "function_call_output", "call_id": "call_1",
+                    "output": json.dumps({"output": "annotations\ntrain2017\nval2017", "metadata": {"exit_code": 0}})}}]
+          open(f"{c}/rollout-smoke.jsonl", "w").write("\n".join(json.dumps(r) for r in lines) + "\n")
+          p = f"{home}/.config/litemux/state.json"
+          s = json.load(open(p))
+          json.dump(s, open(p + ".bak", "w"))
+          s["sidebarMode"] = "hosts"; s["appearance"] = "light"; s["colorTheme"] = "paper"
+          s["tabs"] = [t for t in s["tabs"] if "local" in json.dumps(t) and "lab1" not in json.dumps(t)]
+          s["selectedTabIndex"] = 0
+          json.dump(s, open(p, "w"))
+          EOF
+          LITEMUX_SMOKE_AGENTWATCH=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-agentwatch.log 2>&1 &
+          echo $! > app.pid
+          sleep 11
+          screencapture -x shots/light-agentwatch.png || true
+          sleep 13
+          screencapture -x shots/light-agentwatch-2.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-agentwatch.log; exit 1)
+          echo "--- focus.json"; cat ~/.config/litemux/focus.json || true
+          python3 -u scripts/bridge-smoke.py ./build/LiteMux.app/Contents/MacOS/LiteMux lab1 --focus 2>&1 | tee shots/bridge-focus.txt || true
+          grep smoke shots/app-agentwatch.log || true
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+          mv ~/.config/litemux/state.json.bak ~/.config/litemux/state.json
+          grep -q "watching lab1" shots/app-agentwatch.log && echo "AGENT WATCH OK" || (echo "AGENT WATCH: no live agent row"; tail -40 shots/app-agentwatch.log; exit 1)
+          grep -q "adopted .*agent-cm" shots/app-agentwatch.log && echo "RODE AGENT TUNNEL OK" || echo "note: did not ride the agent's tunnel"
+          mv /tmp/bridge-activity.jsonl ~/.config/litemux/bridge-activity.jsonl 2>/dev/null || true
+
+      - name: Launch and capture (light, mask preview)
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p)); s["sidebarMode"] = "files"
+          s["lastDirectories"] = {"config:lab1": os.path.expanduser("~/exp")}
+          json.dump(s, open(p, "w"))
+          EOF
+          LITEMUX_SMOKE_PREVIEW="config:lab1|$HOME/exp/mask_0001.png" ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-preview.log 2>&1 &
+          echo $! > app.pid
+          sleep 15
+          screencapture -x shots/light-preview.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-preview.log; exit 1)
           kill $(cat app.pid) 2>/dev/null || true
           sleep 2
 

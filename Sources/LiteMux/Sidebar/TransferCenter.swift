@@ -63,6 +63,67 @@ final class TransferCenter {
         }
     }
 
+    /// A whole folder as one `tar -czf -` stream over the shared tunnel (no
+    /// remote temp file, no per-file round trips), unpacked into Downloads.
+    func downloadFolder(_ entry: FileEntry, from host: HostEntry) {
+        guard let app else { return }
+        let destination = DownloadNaming.uniqueURL(in: downloadsDirectory, for: entry.name) {
+            FileManager.default.fileExists(atPath: $0.path)
+        }
+        let item = Item(direction: .download, name: entry.name + "/")
+        item.localURL = destination
+        items.insert(item, at: 0)
+        let fm = FileManager.default
+        if host.isLocal {
+            do {
+                try fm.copyItem(at: URL(fileURLWithPath: entry.path), to: destination)
+                item.state = .done
+                app.toast("已下载 \(destination.lastPathComponent)", style: .success)
+            } catch {
+                item.state = .failed(error.localizedDescription)
+                app.toast("下载失败：\(error.localizedDescription)", style: .error)
+            }
+            return
+        }
+        let env = app.hub.environment(for: host)
+        let shell = ProcessBridgeShell(invocation: app.hub.invocation) { _ in env }
+        let archive = fm.temporaryDirectory.appendingPathComponent("litemux-\(UUID().uuidString).tgz")
+        Task {
+            // Bytes received so far; the compressed size is not known up front.
+            let poll = Task { @MainActor in
+                while !Task.isCancelled {
+                    item.done = ((try? fm.attributesOfItem(atPath: archive.path))?[.size] as? NSNumber)?.uint64Value ?? 0
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                }
+            }
+            let r = await shell.stream(BridgeScripts.download(entry.path, directory: true), on: host,
+                                       input: nil, output: archive, timeout: 6 * 3600)
+            poll.cancel()
+            defer { try? fm.removeItem(at: archive) }
+            guard r.status == 0 else {
+                let reason = r.timedOut ? "超时" : r.err.trimmingCharacters(in: .whitespacesAndNewlines)
+                item.state = .failed(reason)
+                app.toast("下载 \(entry.name) 失败：\(reason)", style: .error)
+                self.prune()
+                return
+            }
+            try? fm.createDirectory(at: destination, withIntermediateDirectories: true)
+            let x = await ProcessBridgeShell.execute("/usr/bin/tar", ["-xzf", archive.path, "-C", destination.path],
+                                                     environment: nil, directory: nil, stdin: nil, timeout: 3600, outputLimit: 16_000)
+            if x.status == 0 {
+                item.state = .done
+                item.total = item.done
+                app.toast("已下载文件夹 \(destination.lastPathComponent)", style: .success, action: ("在 Finder 中显示", {
+                    NSWorkspace.shared.activateFileViewerSelecting([destination])
+                }))
+            } else {
+                item.state = .failed(x.err)
+                app.toast("解包 \(entry.name) 失败：\(x.err.trimmingCharacters(in: .whitespacesAndNewlines))", style: .error)
+            }
+            self.prune()
+        }
+    }
+
     func upload(_ urls: [URL], to dir: String, on host: HostEntry, completion: @escaping () async -> Void) {
         guard let app else { return }
         Task {
