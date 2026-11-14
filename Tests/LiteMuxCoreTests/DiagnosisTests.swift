@@ -90,4 +90,41 @@ final class SSHDiagnosisTests: XCTestCase {
         let args = r?.endpoint.arguments(home: "/Users/me") ?? []
         XCTAssertEqual(args, ["-o", "ProxyCommand=cloudflared access ssh --hostname %h", "root@abc-def.trycloudflare.com"])
     }
+
+    func testProxyTargetFromResolvedConfig() {
+        let out = """
+        user root
+        hostname abc-def.trycloudflare.com
+        port 22
+        proxycommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
+        controlpath none
+        """
+        let t = SSHFailureDiagnosis.proxyTarget(fromResolved: out)
+        XCTAssertEqual(t?.program, "/opt/homebrew/bin/cloudflared")
+        XCTAssertEqual(t?.expanded, "/opt/homebrew/bin/cloudflared access ssh --hostname abc-def.trycloudflare.com")
+        XCTAssertNil(SSHFailureDiagnosis.proxyTarget(fromResolved: "hostname x\nproxycommand none\n"))
+        XCTAssertNil(SSHFailureDiagnosis.proxyTarget(fromResolved: "hostname x\nport 22\n"))
+
+        let nc = SSHFailureDiagnosis.ProxyTarget(command: "exec env TUN=1 nc %h %p # 100%%", host: "0.tcp.ngrok.io", port: 12345, user: "root")
+        XCTAssertEqual(nc.program, "nc")
+        XCTAssertEqual(nc.expanded, "exec env TUN=1 nc 0.tcp.ngrok.io 12345 # 100%")
+    }
+
+    func testProxyProbeOutcomes() {
+        let missing = SSHFailureDiagnosis.diagnoseProxy(program: "cloudflared", found: false, probeOutput: nil)
+        XCTAssertEqual(missing.kind, .proxyMissing)
+        XCTAssertEqual(missing.title, "找不到隧道程序 cloudflared")
+
+        let alive = SSHFailureDiagnosis.diagnoseProxy(program: "/opt/homebrew/bin/cloudflared", found: true,
+                                                      probeOutput: "\nSSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10\r\n")
+        XCTAssertEqual(alive.title, "隧道是通的，但 SSH 握手失败")
+
+        let dead = SSHFailureDiagnosis.diagnoseProxy(program: "cloudflared", found: true, probeOutput: """
+        2026-11-14T19:50:01Z INF Starting
+        2026-11-14T19:50:02Z ERR failed to connect to origin error="websocket: bad handshake"
+
+        """)
+        XCTAssertEqual(dead.kind, .tunnelGone)
+        XCTAssertTrue(dead.detail.hasSuffix("cloudflared 说：2026-11-14T19:50:01Z INF Starting\n2026-11-14T19:50:02Z ERR failed to connect to origin error=\"websocket: bad handshake\""), dead.detail)
+    }
 }

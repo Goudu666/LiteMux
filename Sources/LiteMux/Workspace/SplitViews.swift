@@ -166,44 +166,69 @@ struct ReconnectBanner: View {
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .foregroundStyle(diagnosis == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color(nsColor: Theme.warning)))
-                Text(diagnosis?.title ?? (remote && code == 255 ? "连接已断开" : "会话已结束"))
-                    .font(.system(size: 12, weight: .medium))
-                Spacer(minLength: 12)
-                Button("关闭窗格", action: close)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 12))
-                if diagnosis?.forgetHostKeyArguments != nil {
-                    Button(action: forgetKey) {
-                        Text("忘掉旧密钥并重连").font(.system(size: 12, weight: .semibold))
+        Group {
+            if let diagnosis {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: icon).foregroundStyle(Color(nsColor: Theme.warning))
+                        Text(diagnosis.title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        closeButton
                     }
-                    .controlSize(.small)
-                    .help("ssh-keygen " + (diagnosis?.forgetHostKeyArguments ?? []).joined(separator: " "))
+                    Text(diagnosis.detail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .padding(.leading, 26)
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        if let args = diagnosis.forgetHostKeyArguments {
+                            Button(action: forgetKey) {
+                                Text("忘掉旧密钥并重连").font(.system(size: 12, weight: .medium))
+                            }
+                            .controlSize(.small)
+                            .fixedSize()
+                            .help("ssh-keygen " + args.joined(separator: " "))
+                        }
+                        reconnectButton
+                    }
                 }
-                Button(action: reconnect) {
-                    Text(remote ? "重新连接 ⏎" : "重新打开 ⏎").font(.system(size: 12, weight: .semibold))
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: icon).foregroundStyle(.secondary)
+                    Text(remote && code == 255 ? "连接已断开" : "会话已结束")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer(minLength: 12)
+                    closeButton
+                    reconnectButton
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            if let detail = diagnosis?.detail {
-                Text(detail)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-                    .padding(.leading, 26)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairlineColor))
-        .frame(maxWidth: diagnosis == nil ? 440 : 560)
+        .frame(maxWidth: diagnosis == nil ? 440 : 520)
+    }
+
+    private var closeButton: some View {
+        Button("关闭窗格", action: close)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .fixedSize()
+    }
+
+    private var reconnectButton: some View {
+        Button(action: reconnect) {
+            Text(remote ? "重新连接 ⏎" : "重新打开 ⏎").font(.system(size: 12, weight: .semibold))
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .fixedSize()
     }
 
     private var icon: String {

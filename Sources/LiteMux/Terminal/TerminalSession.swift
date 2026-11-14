@@ -152,6 +152,42 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
         start()
     }
 
+    /// With ControlMaster on, ssh hides the ProxyCommand's stderr, so a broken tunnel only says
+    /// "Connection closed by UNKNOWN port 65535". Resolve the ProxyCommand, check its program,
+    /// and run it once by hand to see what it says (or whether sshd's banner comes back).
+    private func refineProxyDiagnosis(_ endpoint: SSHEndpoint) {
+        guard let hub else { return }
+        let resolveArgs = ["-G"] + endpoint.arguments(home: hub.invocation.home)
+        let env = hub.environment(for: host)
+        Task { @MainActor [weak self] in
+            let r = await ProcessRunner.run(SSHInvocation.sshPath, resolveArgs, environment: env, timeout: 4)
+            guard let target = SSHFailureDiagnosis.proxyTarget(fromResolved: r.stdout),
+                  let program = target.program else { return }
+            let found = Self.isExecutable(program, path: env["PATH"] ?? "")
+            var probe: String?
+            if found {
+                let p = await ProcessRunner.run("/bin/sh", ["-c", "exec " + target.expanded], environment: env, timeout: 6)
+                probe = p.stderr + "\n" + p.stdout
+            }
+            guard let self, case .ended = self.phase else { return }
+            self.diagnosis = SSHFailureDiagnosis.diagnoseProxy(program: program, found: found, probeOutput: probe)
+            Self.smokeLog("smoke: diagnosis \(self.diagnosis?.kind.rawValue ?? "none") (refined) \(self.diagnosis?.title ?? "")")
+        }
+    }
+
+    private static func isExecutable(_ program: String, path: String) -> Bool {
+        let fm = FileManager.default
+        if program.contains("/") {
+            return fm.isExecutableFile(atPath: ShellWords.expandTilde(program))
+        }
+        return path.split(separator: ":").contains { fm.isExecutableFile(atPath: "\($0)/\(program)") }
+    }
+
+    private static func smokeLog(_ line: String) {
+        guard ProcessInfo.processInfo.environment["LITEMUX_SMOKE_DIAGNOSE"] == "1" else { return }
+        FileHandle.standardError.write(Data((line + "\n").utf8))
+    }
+
     /// After "REMOTE HOST IDENTIFICATION HAS CHANGED": forget the stale key, then connect again.
     func forgetHostKeyAndReconnect() {
         guard let args = diagnosis?.forgetHostKeyArguments else { return }
@@ -197,8 +233,9 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
                 let rows = view.terminalStateSnapshot().visibleRows.suffix(60).map { (text: $0.text, isWrapped: $0.isWrapped) }
                 let screen = SSHFailureDiagnosis.joinRows(rows)
                 diagnosis = SSHFailureDiagnosis.diagnose(screen, endpoint: host.endpoint)
-                if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_DIAGNOSE"] == "1" {
-                    FileHandle.standardError.write(Data("smoke: diagnosis \(diagnosis?.kind.rawValue ?? "none") \(diagnosis?.knownHostsName ?? "")\n".utf8))
+                Self.smokeLog("smoke: diagnosis \(diagnosis?.kind.rawValue ?? "none") \(diagnosis?.knownHostsName ?? "")")
+                if let endpoint = host.endpoint, diagnosis == nil || diagnosis?.kind == .tunnelGone {
+                    refineProxyDiagnosis(endpoint)
                 }
             }
             message = diagnosis?.title ?? (ranFor < 8 ? "无法连接或认证失败" : "连接已断开")

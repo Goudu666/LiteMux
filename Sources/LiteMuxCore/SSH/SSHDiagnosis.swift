@@ -125,6 +125,93 @@ public enum SSHFailureDiagnosis {
         return nil
     }
 
+    // MARK: - ProxyCommand (Colab / Kaggle behind cloudflared or ngrok)
+
+    /// With ControlMaster on, OpenSSH sends the ProxyCommand's stderr to /dev/null, so a
+    /// failing tunnel only shows "Connection closed by UNKNOWN port 65535". These helpers let
+    /// the app resolve the ProxyCommand (`ssh -G`), check its program and run it once itself.
+    public struct ProxyTarget: Equatable, Sendable {
+        public var command: String
+        public var host: String
+        public var port: Int
+        public var user: String
+
+        /// `%h %p %r %n %%` expanded the way ssh does for ProxyCommand.
+        public var expanded: String {
+            var out = ""
+            var it = command.makeIterator()
+            while let c = it.next() {
+                guard c == "%" else { out.append(c); continue }
+                switch it.next() {
+                case "h"?: out += host
+                case "n"?: out += host
+                case "p"?: out += String(port)
+                case "r"?: out += user
+                case "%"?: out += "%"
+                case let other?: out += "%" + String(other)
+                case nil: out += "%"
+                }
+            }
+            return out
+        }
+
+        /// The program the ProxyCommand starts (skipping `exec`, `env` and assignments).
+        public var program: String? {
+            var words = ShellWords.split(command)
+            while let w = words.first, w == "exec" || w == "env" || ShellScan.isAssignment(w) {
+                words.removeFirst()
+            }
+            return words.first
+        }
+    }
+
+    /// Reads `ssh -G` output. Nil when the host has no ProxyCommand.
+    public static func proxyTarget(fromResolved output: String) -> ProxyTarget? {
+        var command: String?
+        var host = "", user = "", port = 22
+        for raw in output.components(separatedBy: .newlines) {
+            guard let space = raw.firstIndex(of: " ") else { continue }
+            let key = raw[..<space].lowercased()
+            let value = String(raw[raw.index(after: space)...]).trimmingCharacters(in: .whitespaces)
+            switch key {
+            case "proxycommand": command = value
+            case "hostname": host = value
+            case "user": user = value
+            case "port": port = Int(value) ?? 22
+            default: break
+            }
+        }
+        guard let command, !command.isEmpty, command.lowercased() != "none" else { return nil }
+        return ProxyTarget(command: command, host: host, port: port, user: user)
+    }
+
+    /// What running the tunnel by hand showed.
+    public static func diagnoseProxy(program: String, found: Bool, probeOutput: String?) -> SSHDiagnosis {
+        let name = program.split(separator: "/").last.map(String.init) ?? program
+        if !found {
+            return SSHDiagnosis(
+                kind: .proxyMissing,
+                title: "找不到隧道程序 \(name)",
+                detail: "ProxyCommand 要用到它。LiteMux 会在登录 Shell 的 PATH、/opt/homebrew/bin、/usr/local/bin、~/.local/bin 里找；装在别处的话，把 ProxyCommand 里的 \(name) 换成完整路径。")
+        }
+        let output = probeOutput ?? ""
+        if output.contains("SSH-2.0-") || output.contains("SSH-1.99-") {
+            return SSHDiagnosis(
+                kind: .tunnelGone,
+                title: "隧道是通的，但 SSH 握手失败",
+                detail: "手动跑了一次 \(name)，对面的 sshd 有应答。可能是隧道刚恢复，先点「重新连接」；还不行的话检查用户名，以及 sshd 是否允许这种登录方式。")
+        }
+        let tail = output.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .suffix(2)
+            .map { $0.count > 160 ? String($0.prefix(160)) + "…" : $0 }
+            .joined(separator: "\n")
+        var detail = "SSH 收不到对面 sshd 的应答。Colab / Kaggle 的运行时断开或重启后隧道会失效：重新运行 notebook 里的隧道单元，确认 sshd 在跑，再用新地址连。"
+        if !tail.isEmpty { detail += "\n\(name) 说：\(tail)" }
+        return SSHDiagnosis(kind: .tunnelGone, title: "隧道另一头没有响应", detail: detail)
+    }
+
     // MARK: - Details
 
     /// `Host key for [0.tcp.ngrok.io]:12345 has changed…` and

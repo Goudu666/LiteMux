@@ -407,7 +407,9 @@ jobs:
           grep "smoke: " shots/app-diagnose.log || true
           echo "--- known_hosts now has for 127.0.0.1:"; ssh-keygen -F 127.0.0.1 | tail -1 | cut -c1-80
           grep -q "smoke: diagnosis hostKeyChanged 127.0.0.1" shots/app-diagnose.log || (echo "DIAGNOSE: host key change not recognised"; exit 1)
-          grep -q "smoke: diagnosis proxyMissing" shots/app-diagnose.log || echo "note: cloudflared case was not diagnosed as proxyMissing"
+          if command -v cloudflared >/dev/null; then echo "note: runner has cloudflared, skipping the missing-program check"; else
+            grep -q "smoke: diagnosis proxyMissing (refined)" shots/app-diagnose.log || (echo "DIAGNOSE: hidden ProxyCommand failure not found"; exit 1)
+          fi
           grep -q "after fix autodl-重建后 phase=running" shots/app-diagnose.log && echo "HOST KEY FIX OK" || (echo "DIAGNOSE: pane did not reconnect after forgetting the key"; exit 1)
 
       # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
