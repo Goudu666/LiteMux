@@ -239,6 +239,10 @@ jobs:
       # no lab1 pane open, so watching must ride the agent's tunnel.
       - name: Launch and capture (light, Agent watch)
         run: |
+          # LiteMux's own masters from earlier steps must be gone, so the app has to ride the agent's tunnel.
+          for s in ~/.ssh/lm/*; do [ -S "$s" ] && ssh -o ControlPath="$s" -O exit lab1 2>/dev/null || true; done
+          # The Bridge e2e calls above would crowd the history list; keep them aside for this shot.
+          mv ~/.config/litemux/bridge-activity.jsonl /tmp/bridge-activity.jsonl 2>/dev/null || true
           mkdir -p ~/fake-agent
           cat > ~/fake-agent/claude <<'EOF'
           #!/bin/bash
@@ -305,6 +309,8 @@ jobs:
           sleep 2
           mv ~/.config/litemux/state.json.bak ~/.config/litemux/state.json
           grep -q "watching lab1" shots/app-agentwatch.log && echo "AGENT WATCH OK" || (echo "AGENT WATCH: no live agent row"; tail -40 shots/app-agentwatch.log; exit 1)
+          grep -q "adopted .*agent-cm" shots/app-agentwatch.log && echo "RODE AGENT TUNNEL OK" || echo "note: did not ride the agent's tunnel"
+          mv /tmp/bridge-activity.jsonl ~/.config/litemux/bridge-activity.jsonl 2>/dev/null || true
 
       - name: Launch and capture (light, mask preview)
         run: |

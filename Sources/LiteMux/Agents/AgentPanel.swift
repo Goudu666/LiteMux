@@ -165,6 +165,8 @@ private struct Chip: View {
             Image(systemName: icon).font(.system(size: 8.5, weight: .semibold))
             Text(text).lineLimit(1).truncationMode(.middle)
         }
+        .frame(maxWidth: 180, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
         .font(.system(size: 10))
         .foregroundStyle(accent ? AnyShapeStyle(Theme.accentColor) : AnyShapeStyle(.secondary))
         .padding(.horizontal, 5)
@@ -226,6 +228,53 @@ enum AgentFormat {
     }
 }
 
+/// Lays chips out left to right and wraps onto a new line when the sidebar is narrow.
+private struct ChipFlow: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for i in row.items {
+                let size = subviews[i].sizeThatFits(.unspecified)
+                let w = min(size.width, bounds.width)
+                subviews[i].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                  proposal: ProposedViewSize(width: w, height: size.height))
+                x += w + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row { var items: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for (i, view) in subviews.enumerated() {
+            let size = view.sizeThatFits(.unspecified)
+            let w = min(size.width, width)
+            if !current.items.isEmpty && current.width + spacing + w > width {
+                rows.append(current)
+                current = Row()
+            }
+            current.width += (current.items.isEmpty ? 0 : spacing) + w
+            current.height = max(current.height, size.height)
+            current.items.append(i)
+        }
+        if !current.items.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
 // MARK: - Live
 
 private struct LiveRow: View {
@@ -261,11 +310,15 @@ private struct LiveRow: View {
                 }
                 let chips = chipsFor(insight)
                 if !chips.isEmpty || row.socket != nil || row.ssh.app != nil {
-                    HStack(spacing: 4) {
+                    ChipFlow(spacing: 4) {
+                        if let s = insight.tmuxSessions.last {
+                            Chip(icon: "eye", text: s, accent: true).help("tmux 会话 \(s)：单击只读旁观")
+                        }
+                        if let d = insight.directory { Chip(icon: "folder", text: AgentFormat.shortDir(d)).help(d) }
+                        if row.socket != nil {
+                            Chip(icon: "link", text: "可复用", accent: true).help("这台机器可以借用 Agent 的 SSH 连接，不用再登录")
+                        }
                         if let app = row.ssh.app { Chip(icon: "macwindow", text: app) }
-                        if let s = insight.tmuxSessions.last { Chip(icon: "eye", text: s, accent: true) }
-                        if row.socket != nil { Chip(icon: "link", text: "可复用连接", accent: true) }
-                        if let d = insight.directory { Chip(icon: "folder", text: AgentFormat.shortDir(d)) }
                     }
                     .padding(.leading, 26)
                 }
@@ -392,7 +445,9 @@ private struct HistoryRow: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
-                Text(action.source == .bridge ? "\(action.tool) · \(action.command)" : action.insight.headline)
+                Text(action.source == .bridge
+                     ? (action.command.isEmpty ? action.tool : "\(action.tool) · \(action.command)")
+                     : action.insight.headline)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(expanded ? 6 : 1)
