@@ -78,6 +78,8 @@ Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `c
 
 侧边栏第三页「Agent」（⌥⌘3）显示本机的 Coding Agent 正在服务器上做什么，LiteMux 和 Agent 用的是同一套连接、同一批 tmux 会话：
 
+![Agent 同屏：本机 Claude Code 在 lab1 上起的训练，单击后只读旁观它的 tmux 会话，连接借用的是 Agent 自己的 ControlMaster](docs/screenshots/agent-watch.png)
+
 - **正在运行**：Claude Code、Codex、Antigravity、Cursor 等在本机起的 `ssh`（从进程树认出是哪个 Agent），去了哪台机器、跑的是什么命令、在哪个目录、碰了哪个 tmux 会话或日志文件。
 - **点一下旁观**：命令里有 tmux 会话就以只读方式挂上去（`tmux attach -r`，你的按键不会打扰它），右键可以「接管」；有日志文件就打开日志；否则在它工作的目录开一个终端。
 - **复用它的连接**：Agent 自己的 ControlMaster 还在、LiteMux 这边没连这台机器时，LiteMux 直接借它的套接字连上去，要密码或验证码的机器不用再登录一次。没见过的目标地址可以一键导入成书签。
