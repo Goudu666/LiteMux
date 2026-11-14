@@ -363,6 +363,53 @@ jobs:
             sleep 2
           done
 
+      # Ephemeral instances: Colab behind cloudflared whose program is missing, and an
+      # instance recreated on the same address (its host key changed). The app has to
+      # say why, and "forget the old key" has to get the pane connected.
+      - name: Launch and capture (light, connection diagnosis)
+        run: |
+          for s in ~/.ssh/lm/*; do [ -S "$s" ] && ssh -o ControlPath="$s" -O exit lab1 2>/dev/null || true; done
+          command -v cloudflared && echo "note: cloudflared exists on this runner" || true
+          ssh-keygen -R 127.0.0.1 >/dev/null 2>&1 || true
+          ssh-keygen -q -t ed25519 -N "" -f /tmp/old_instance_key
+          echo "127.0.0.1 $(cut -d' ' -f1,2 /tmp/old_instance_key.pub)" >> ~/.ssh/known_hosts
+          cp ~/.config/litemux/state.json ~/.config/litemux/state.json.bak
+          python3 - <<'EOF'
+          import json, os, uuid
+          u = lambda: str(uuid.uuid4()).upper()
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p))
+          rebuilt, colab = u(), u()
+          s["bookmarks"] = [
+            {"id": rebuilt, "name": "autodl-重建后", "endpoint": {"host": "127.0.0.1", "user": os.environ["USER"],
+             "identityFile": "~/.ssh/id_ed25519", "options": []}, "hasSavedPassword": False, "createdAt": "2026-11-14T00:00:00Z"},
+            {"id": colab, "name": "colab", "endpoint": {"host": "lm-demo.trycloudflare.com", "user": "root",
+             "options": ["ProxyCommand=cloudflared access ssh --hostname %h"]}, "hasSavedPassword": False, "createdAt": "2026-11-14T00:00:00Z"},
+          ] + s.get("bookmarks", [])
+          leaf = lambda host: {"leaf": {"_0": {"id": u(), "hostID": host, "slot": 7}}}
+          tree = {"split": {"id": u(), "axis": "horizontal", "ratio": 0.5,
+                            "first": leaf("bookmark:" + rebuilt), "second": leaf("bookmark:" + colab)}}
+          s["tabs"] = [{"id": u(), "kind": {"terminal": {"_0": tree}}}]
+          s["selectedTabIndex"] = 0
+          s["appearance"] = "light"; s["colorTheme"] = "paper"; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          LITEMUX_SMOKE_DIAGNOSE=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-diagnose.log 2>&1 &
+          echo $! > app.pid
+          sleep 10
+          screencapture -x shots/light-diagnose.png || true
+          sleep 13
+          screencapture -x shots/light-diagnose-2.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-diagnose.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+          mv ~/.config/litemux/state.json.bak ~/.config/litemux/state.json
+          grep "smoke: " shots/app-diagnose.log || true
+          echo "--- known_hosts now has for 127.0.0.1:"; ssh-keygen -F 127.0.0.1 | tail -1 | cut -c1-80
+          grep -q "smoke: diagnosis hostKeyChanged 127.0.0.1" shots/app-diagnose.log || (echo "DIAGNOSE: host key change not recognised"; exit 1)
+          grep -q "smoke: diagnosis proxyMissing" shots/app-diagnose.log || echo "note: cloudflared case was not diagnosed as proxyMissing"
+          grep -q "after fix autodl-重建后 phase=running" shots/app-diagnose.log && echo "HOST KEY FIX OK" || (echo "DIAGNOSE: pane did not reconnect after forgetting the key"; exit 1)
+
       # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
       # them with git: `git fetch origin refs/ci/shots/<branch>`.
       - name: Publish screenshots to refs/ci/shots/<branch>

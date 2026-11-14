@@ -68,6 +68,9 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
     private(set) var phase: Phase = .idle
     private(set) var terminalTitle = ""
     private(set) var startedAt: Date?
+    /// Why ssh failed, when it printed something LiteMux recognises.
+    private(set) var diagnosis: SSHDiagnosis?
+    @ObservationIgnored private var acceptNewHostKeyOnce = false
 
     init(pane: PaneSpec, host: HostEntry, usesTmux: Bool, fontSize: CGFloat, useMetal: Bool, hub: ConnectionHub) {
         self.pane = pane
@@ -103,17 +106,23 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
 
     func start() {
         view.isEnded = false
+        diagnosis = nil
         phase = .running
         startedAt = Date()
         if let endpoint = host.endpoint {
             guard let hub else { return }
             try? hub.invocation.ensureControlDirectory()
-            let args = hub.invocation.terminalArguments(endpoint: endpoint,
+            var args = hub.invocation.terminalArguments(endpoint: endpoint,
                                                         slot: usesTmux ? pane.slot : nil,
                                                         directory: pane.directory,
                                                         usesAskpass: host.hasSavedPassword,
                                                         session: pane.session,
                                                         readOnly: pane.readOnly == true)
+            if acceptNewHostKeyOnce {
+                // The user just chose to forget the stale key: take the new one without a second prompt.
+                args.insert(contentsOf: ["-o", "StrictHostKeyChecking=accept-new"], at: 1)
+                acceptNewHostKeyOnce = false
+            }
             let env = hub.environment(for: host)
             view.startProcess(executable: SSHInvocation.sshPath, args: args,
                               environment: ProcessRunner.environmentArray(env), execName: "ssh")
@@ -143,6 +152,21 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
         start()
     }
 
+    /// After "REMOTE HOST IDENTIFICATION HAS CHANGED": forget the stale key, then connect again.
+    func forgetHostKeyAndReconnect() {
+        guard let args = diagnosis?.forgetHostKeyArguments else { return }
+        Task { @MainActor in
+            let r = await ProcessRunner.run("/usr/bin/ssh-keygen", args, environment: ProcessRunner.baseEnvironment(), timeout: 5)
+            if r.status != 0 {
+                let dim = "\u{1b}[2m", reset = "\u{1b}[0m"
+                view.feed(text: "\(dim)ssh-keygen \(args.joined(separator: " ")) 失败：\(r.stderr.trimmingCharacters(in: .whitespacesAndNewlines))\(reset)\r\n")
+                return
+            }
+            acceptNewHostKeyOnce = true
+            restart()
+        }
+    }
+
     func terminate() {
         if phase == .running { view.terminate() }
         phase = .ended(code: nil)
@@ -169,7 +193,15 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
         let ranFor = Date().timeIntervalSince(startedAt ?? Date())
         let message: String
         if host.endpoint != nil, exitCode == 255 {
-            message = ranFor < 8 ? "无法连接或认证失败" : "连接已断开"
+            if ranFor < 30 {
+                let rows = view.terminalStateSnapshot().visibleRows.suffix(60).map { (text: $0.text, isWrapped: $0.isWrapped) }
+                let screen = SSHFailureDiagnosis.joinRows(rows)
+                diagnosis = SSHFailureDiagnosis.diagnose(screen, endpoint: host.endpoint)
+                if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_DIAGNOSE"] == "1" {
+                    FileHandle.standardError.write(Data("smoke: diagnosis \(diagnosis?.kind.rawValue ?? "none") \(diagnosis?.knownHostsName ?? "")\n".utf8))
+                }
+            }
+            message = diagnosis?.title ?? (ranFor < 8 ? "无法连接或认证失败" : "连接已断开")
             hub?.markOffline(host.id)
         } else {
             message = "会话已结束"

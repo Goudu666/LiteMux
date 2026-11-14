@@ -114,6 +114,22 @@ final class AppModel {
             }
         }
         if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_AGENTWATCH"] == "1" { smokeAgentWatch() }
+        if ProcessInfo.processInfo.environment["LITEMUX_SMOKE_DIAGNOSE"] == "1" {
+            // CI: a recreated instance with a changed host key. Press "忘掉旧密钥并重连" like a user would.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+                guard let self else { return }
+                for s in self.sessions.values where s.diagnosis?.kind == .hostKeyChanged {
+                    FileHandle.standardError.write(Data("smoke: forgetting \(s.diagnosis?.forgetHostKeyArguments ?? [])\n".utf8))
+                    s.forgetHostKeyAndReconnect()
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
+                guard let self else { return }
+                for s in self.sessions.values {
+                    FileHandle.standardError.write(Data("smoke: after fix \(s.host.title) phase=\(s.phase) diagnosis=\(s.diagnosis?.kind.rawValue ?? "none")\n".utf8))
+                }
+            }
+        }
         applyAppearance()
         activeHostChanged()
         agents.start()

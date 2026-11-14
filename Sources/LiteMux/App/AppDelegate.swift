@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var model: AppModel!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        ProcessRunner.loadLoginShellPath()
         model = AppModel()
         NSApp.mainMenu = MainMenu.build(target: self)
 

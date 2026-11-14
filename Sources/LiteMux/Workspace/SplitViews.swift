@@ -130,7 +130,9 @@ struct PaneView: View {
                     .background(Theme.canvasColor, ignoresSafeAreaEdges: [])
                 if case .ended(let code) = session.phase {
                     ReconnectBanner(remote: session.host.endpoint != nil, code: code,
+                                    diagnosis: session.diagnosis,
                                     reconnect: { session.restart(); model.focusSoon(pane.id) },
+                                    forgetKey: { session.forgetHostKeyAndReconnect(); model.focusSoon(pane.id) },
                                     close: { model.closePane(pane.id, in: tab) })
                         .padding(10)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -158,30 +160,59 @@ struct PaneView: View {
 struct ReconnectBanner: View {
     let remote: Bool
     let code: Int32?
+    var diagnosis: SSHDiagnosis? = nil
     let reconnect: () -> Void
+    var forgetKey: () -> Void = {}
     let close: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: remote ? "bolt.horizontal.circle" : "checkmark.circle")
-                .foregroundStyle(.secondary)
-            Text(remote && code == 255 ? "连接已断开" : "会话已结束")
-                .font(.system(size: 12, weight: .medium))
-            Spacer(minLength: 12)
-            Button("关闭窗格", action: close)
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .font(.system(size: 12))
-            Button(action: reconnect) {
-                Text(remote ? "重新连接 ⏎" : "重新打开 ⏎").font(.system(size: 12, weight: .semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .foregroundStyle(diagnosis == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color(nsColor: Theme.warning)))
+                Text(diagnosis?.title ?? (remote && code == 255 ? "连接已断开" : "会话已结束"))
+                    .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 12)
+                Button("关闭窗格", action: close)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                if diagnosis?.forgetHostKeyArguments != nil {
+                    Button(action: forgetKey) {
+                        Text("忘掉旧密钥并重连").font(.system(size: 12, weight: .semibold))
+                    }
+                    .controlSize(.small)
+                    .help("ssh-keygen " + (diagnosis?.forgetHostKeyArguments ?? []).joined(separator: " "))
+                }
+                Button(action: reconnect) {
+                    Text(remote ? "重新连接 ⏎" : "重新打开 ⏎").font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            if let detail = diagnosis?.detail {
+                Text(detail)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .padding(.leading, 26)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairlineColor))
-        .frame(maxWidth: 440)
+        .frame(maxWidth: diagnosis == nil ? 440 : 560)
+    }
+
+    private var icon: String {
+        switch diagnosis?.kind {
+        case .hostKeyChanged?: return "key.horizontal"
+        case .proxyMissing?, .tunnelGone?: return "point.3.connected.trianglepath.dotted"
+        case .authFailed?, .tooManyKeys?: return "lock"
+        case .some: return "exclamationmark.triangle"
+        case nil: return remote ? "bolt.horizontal.circle" : "checkmark.circle"
+        }
     }
 }
