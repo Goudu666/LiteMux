@@ -1,0 +1,6 @@
+
+>>> get_user_focus {}
+用户正在看 lab1 的终端，tmux 会话 agent-train（read_terminal 可读），只读旁观中
+
+文件树：lab1:/Users/runner/exp
+    ok: get_user_focus says what the user is looking at
