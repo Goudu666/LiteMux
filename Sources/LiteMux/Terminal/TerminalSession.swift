@@ -112,7 +112,8 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
                                                         slot: usesTmux ? pane.slot : nil,
                                                         directory: pane.directory,
                                                         usesAskpass: host.hasSavedPassword,
-                                                        session: pane.session)
+                                                        session: pane.session,
+                                                        readOnly: pane.readOnly == true)
             let env = hub.environment(for: host)
             view.startProcess(executable: SSHInvocation.sshPath, args: args,
                               environment: ProcessRunner.environmentArray(env), execName: "ssh")
@@ -124,7 +125,8 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
             var args: [String] = []
             if let named = pane.session {
                 let s = ShellWords.quote(named)
-                args = ["-l", "-c", "command -v tmux >/dev/null 2>&1 && tmux has-session -t =\(s) 2>/dev/null && exec tmux attach-session -t =\(s); exec \"$SHELL\" -l"]
+                let ro = pane.readOnly == true ? "-r " : ""
+                args = ["-l", "-c", "command -v tmux >/dev/null 2>&1 && tmux has-session -t =\(s) 2>/dev/null && exec tmux attach-session \(ro)-t =\(s); exec \"$SHELL\" -l"]
             } else if usesTmux, let slot = pane.slot {
                 let s = SSHInvocation.sessionName(slot: slot)
                 args = ["-l", "-c", "command -v tmux >/dev/null 2>&1 && exec tmux new-session -A -s \(s); exec \"$SHELL\" -l"]

@@ -35,8 +35,10 @@ Sources/
     Workspace/            二叉分屏树、tmux 槽位分配、持久化状态
     Training/             训练日志解析与 Training Pulse 追踪
     Bridge/               MCP（JSON-RPC over stdio）、Agent 工具、权限与活动日志
+    Agents/               shell 命令扫描、ssh 参数解析、命令洞察、ps 扫描、Claude Code / Codex 会话记录、时间线、用户焦点
   LiteMux/                App
     Bridge/               `--mcp` 入口、确认弹窗、「接入 Coding Agent」面板
+    Agents/               「Agent 同屏」：扫描与时间线（AgentWatch）、侧栏面板、借隧道与焦点写入
     App/                  AppDelegate、菜单、AppModel、ConnectionHub
     Terminal/             TerminalSession（每个窗格一个 PTY）
     Workspace/            标签栏、分屏渲染、空状态
@@ -72,6 +74,8 @@ sh -c 'cd <dir> 2>/dev/null; if command -v tmux >/dev/null 2>&1; then exec tmux 
 **文件与传输（v0.3）。** `edit_file` 先读回整份文件和它的 `cksum`，在本机做唯一匹配并生成 diff 给审批框；写入时内容分块 base64 进一个 `.lm-edit` 暂存文件，最后一条命令只有在 `cksum` 没变时才 `cat 暂存 > 原文件`，所以 inode、权限、属主都不动，别人中途改过就拒绝。`download_file` / `upload_file` 让 ssh 子进程的 stdout / stdin 直接接本机文件（`posix_spawn` 的 file actions），字节不经过内存也不经过 base64；文件夹用 `tar -czf -` 一条流传输。`send_to_terminal` 发送前先查 `#{pane_current_command}`，前台不是 shell 就拒绝；`session:"new"` 在服务器上建一个 LiteMux 没占用的 `lm_<n>`，并通过分布式通知让开着的 LiteMux 把它显示成标签页。
 
 **端口转发。** 状态栏主机名的弹层用同一套脚本列出 tmux 会话和监听端口（`ss -ltnp`，没有就 `lsof` / `netstat`），转发是 `ssh -O forward -L 127.0.0.1:本地:localhost:远端`，挂在终端已有的 master 上，不需要再登录，master 退出时一起消失。本地端口优先用同号，被占就往后找。
+
+**Agent 同屏。** 每 1.2 秒（面板不在屏幕上时 4 秒）跑一次 `ps -axww -o pid=,ppid=,etime=,command=`，挑出 `ssh`，沿父进程往上找到第一个认识的 Agent；先碰到 LiteMux 自己的就跳过，`~/.ssh/lm` 下的套接字（LiteMux 的终端、SFTP、探针、Bridge）也跳过，ProxyJump 的子 ssh 不算。ControlPersist 的后台 master 在 `ps` 里叫 `ssh: <套接字> [mux]`。目标主机用 `ssh -G`（带上 Agent 原来的 `-o` 选项）解析出 hostname / user / port / controlpath，再和书签、ssh config 对上。远端命令经过一个小的 shell 扫描器（引号、`&&`、管道、`$( )`、heredoc），找出 `cd` 目录、tmux 会话（`new -s`、`-t`、`send-keys`）、重定向和 `tail -f` 的日志、去掉 `cd` / `source` / 重定向之后真正的命令。会话记录只读文件末尾新增的部分（首次最多回看 384 KB），只跟最近 3 小时写过的 16 个会话；同一条命令在 `ps` 和会话记录里都出现时只显示一次。借隧道是内存里的 `hostID → 套接字`，`host(id)` 返回的 endpoint 带上 `ControlPath=<套接字>`，终端、SFTP、探针、端口转发都跟着走；套接字消失就自动退回 LiteMux 自己的隧道，退出时也不会去关 Agent 的 master。
 
 ## 构建与体积
 

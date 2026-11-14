@@ -28,6 +28,14 @@ struct EditorPane: View {
                     Text("未保存").font(.system(size: 10.5)).foregroundStyle(.secondary)
                 }
                 Button {
+                    model.copyReference(document)
+                } label: {
+                    Image(systemName: "text.quote").font(.system(size: 11))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("复制文件位置和选中的代码，粘贴给 Coding Agent（接入 LiteMux 的 Agent 也能用 get_user_focus 直接读到）")
+                Button {
                     model.saveActiveEditor()
                 } label: {
                     Text("保存 ⌘S").font(.system(size: 11, weight: .medium))
@@ -144,6 +152,7 @@ struct CodeEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let tv = textView else { return }
             document.text = tv.string
+            document.edits += 1
             pending?.cancel()
             pending = Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 120_000_000)
@@ -151,6 +160,11 @@ struct CodeEditor: NSViewRepresentable {
                 self?.highlightAll()
             }
             tv.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let tv = textView else { return }
+            document.selection = tv.selectedRange()
         }
 
         func highlightAll() {

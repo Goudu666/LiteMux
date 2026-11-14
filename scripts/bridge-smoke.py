@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Drive `LiteMux --mcp` the way a coding agent does and check the answers.
 
-    scripts/bridge-smoke.py <path to LiteMux executable> <host> [--confirm-shot out.png]
+    scripts/bridge-smoke.py <path to LiteMux executable> <host> [--confirm-shot out.png | --focus]
 
 Plain mode runs every tool against <host> (which needs a LiteMux tmux pane
 lm_1 printing a training log) and exits non-zero on the first wrong answer.
@@ -240,9 +240,21 @@ def confirm_shot(exe, host, png):
     b.p.kill()
 
 
+def focus(exe):
+    """get_user_focus against the focus.json a running LiteMux keeps writing."""
+    b = Bridge(exe)
+    b.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                         "clientInfo": {"name": "claude-code", "version": "smoke"}})
+    text, err = b.tool("get_user_focus")
+    expect(not err and "用户正在看" in text, "get_user_focus says what the user is looking at")
+    b.close()
+
+
 if __name__ == "__main__":
     exe, host = sys.argv[1], sys.argv[2]
-    if len(sys.argv) > 4 and sys.argv[3] == "--confirm-shot":
+    if len(sys.argv) > 3 and sys.argv[3] == "--focus":
+        focus(exe)
+    elif len(sys.argv) > 4 and sys.argv[3] == "--confirm-shot":
         confirm_shot(exe, host, sys.argv[4])
     else:
         full(exe, host)

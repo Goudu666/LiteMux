@@ -188,6 +188,7 @@ struct AgentBridgeSheet: View {
     private func icon(_ name: String) -> String {
         switch name {
         case "list_hosts": return "server.rack"
+        case "get_user_focus": return "eye"
         case "read_terminal": return "terminal"
         case "training_status": return "chart.line.downtrend.xyaxis"
         case "gpu_status": return "cpu"

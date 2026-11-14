@@ -35,10 +35,18 @@ public struct SSHInvocation: Sendable {
         }
     }
 
-    public var multiplexOptions: [String] {
+    /// LiteMux's own socket, or the coding agent's master the endpoint rides
+    /// (`SSHEndpoint.adoptedControlPath`).
+    public func controlPath(for endpoint: SSHEndpoint?) -> String {
+        endpoint?.adoptedControlPath ?? controlPath
+    }
+
+    public var multiplexOptions: [String] { multiplexOptions(for: nil) }
+
+    public func multiplexOptions(for endpoint: SSHEndpoint?) -> [String] {
         [
             "-o", "ControlMaster=auto",
-            "-o", "ControlPath=\(controlPath)",
+            "-o", "ControlPath=\(controlPath(for: endpoint))",
             "-o", "ControlPersist=\(controlPersist)",
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
@@ -52,8 +60,8 @@ public struct SSHInvocation: Sendable {
     ]
 
     /// Non-interactive options for SFTP and probes. They never block on a prompt.
-    public func backgroundOptions(usesAskpass: Bool) -> [String] {
-        var opts = multiplexOptions + ["-o", "ConnectTimeout=6"]
+    public func backgroundOptions(usesAskpass: Bool, endpoint: SSHEndpoint? = nil) -> [String] {
+        var opts = multiplexOptions(for: endpoint) + ["-o", "ConnectTimeout=6"]
         if usesAskpass {
             opts += Self.askpassOptions
         } else {
@@ -66,18 +74,19 @@ public struct SSHInvocation: Sendable {
 
     /// Interactive terminal: `ssh -t … dest -- sh -c '<launcher>'`.
     public func terminalArguments(endpoint: SSHEndpoint, slot: Int?, directory: String?, usesAskpass: Bool,
-                                  session: String? = nil) -> [String] {
-        var args = ["-t"] + multiplexOptions
+                                  session: String? = nil, readOnly: Bool = false) -> [String] {
+        var args = ["-t"] + multiplexOptions(for: endpoint)
         if usesAskpass { args += Self.askpassOptions }
         args += endpoint.arguments(home: home)
-        args.append(Self.remoteLauncher(slot: slot, directory: directory, session: session))
+        args.append(Self.remoteLauncher(slot: slot, directory: directory, session: session, readOnly: readOnly))
         return args
     }
 
     /// The remote command for a pane. With a slot it attaches to (or creates)
     /// the private `lm_<slot>` tmux session, falling back to the login shell
     /// silently when tmux is missing. It never touches global tmux options.
-    public static func remoteLauncher(slot: Int?, directory: String?, session: String? = nil) -> String {
+    /// `readOnly` watches someone else's session (`tmux attach -r`): keys are not sent to it.
+    public static func remoteLauncher(slot: Int?, directory: String?, session: String? = nil, readOnly: Bool = false) -> String {
         var script = ""
         if let directory, !directory.isEmpty {
             let dir: String
@@ -93,7 +102,8 @@ public struct SSHInvocation: Sendable {
         if let session, !session.isEmpty {
             // Someone else's session: attach as it is, never create or rename it.
             let s = ShellWords.quote(session)
-            script += "if command -v tmux >/dev/null 2>&1 && tmux has-session -t =\(s) 2>/dev/null; then exec tmux attach-session -t =\(s); fi; "
+            let flags = readOnly ? "-r " : ""
+            script += "if command -v tmux >/dev/null 2>&1 && tmux has-session -t =\(s) 2>/dev/null; then exec tmux attach-session \(flags)-t =\(s); fi; "
         } else if let slot {
             let session = sessionName(slot: slot)
             script += "if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s \(session); fi; "
@@ -108,17 +118,17 @@ public struct SSHInvocation: Sendable {
 
     /// `ssh … -s dest sftp` — the binary SFTP subsystem over stdin/stdout.
     public func sftpArguments(endpoint: SSHEndpoint, usesAskpass: Bool) -> [String] {
-        ["-T"] + backgroundOptions(usesAskpass: usesAskpass) + ["-s"] + endpoint.arguments(home: home) + ["sftp"]
+        ["-T"] + backgroundOptions(usesAskpass: usesAskpass, endpoint: endpoint) + ["-s"] + endpoint.arguments(home: home) + ["sftp"]
     }
 
     /// A long-lived `sh` on the remote side that the status bar writes probe scripts to.
     public func probeShellArguments(endpoint: SSHEndpoint, usesAskpass: Bool) -> [String] {
-        ["-T"] + backgroundOptions(usesAskpass: usesAskpass) + endpoint.arguments(home: home) + ["exec sh"]
+        ["-T"] + backgroundOptions(usesAskpass: usesAskpass, endpoint: endpoint) + endpoint.arguments(home: home) + ["exec sh"]
     }
 
     /// `ssh -O check` / `-O exit` against the shared master.
     public func controlArguments(endpoint: SSHEndpoint, command: String) -> [String] {
-        ["-o", "ControlPath=\(controlPath)", "-O", command] + endpoint.arguments(home: home)
+        ["-o", "ControlPath=\(controlPath(for: endpoint))", "-O", command] + endpoint.arguments(home: home)
     }
 
     /// Socket files currently present in `~/.ssh/lm`.

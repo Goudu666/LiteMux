@@ -59,6 +59,7 @@ Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `c
 | 工具 | 作用 | 权限 |
 | --- | --- | --- |
 | `list_hosts` | 书签、`~/.ssh/config`、本机；是否已连接，每台机器上的 tmux 会话 | 读 |
+| `get_user_focus` | 你在 LiteMux 里正在看什么：打开的文件、光标行和选中的代码，当前终端窗格（tmux 会话名），文件树所在目录 | 读 |
 | `read_terminal` | 读某个窗格（`lm_<n>`，或你自己起的 `train` 之类会话）最近的输出 | 读 |
 | `training_status` | 从窗格或日志文件（`log_path`）解析训练状态、epoch 进度、各指标最新 / 最佳 / 趋势、loss 曲线和上一次运行 | 读 |
 | `host_status` | GPU（利用率、显存、占用进程）、负载和最忙的进程、每个挂载点的剩余空间、监听端口、失败的 systemd 服务、Docker 容器（旧名 `gpu_status` 仍可用） | 读 |
@@ -72,6 +73,19 @@ Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `c
 三种模式存在 `~/.config/litemux/bridge.json`：**只读**（只保留读类工具）、**执行前确认**（默认，每次弹窗；回车不会误点允许）、**完全信任**。所有调用都记在 `~/.config/litemux/bridge-activity.jsonl`。
 
 `LiteMux --mcp` 不需要 LiteMux 开着：它直接读 `state.json`，有现成的 SSH 隧道就复用，没有就用密钥直连，保存过密码的书签走钥匙串。只有要验证码的机器，才需要先在 LiteMux 里开一次终端。
+
+## Agent 同屏
+
+侧边栏第三页「Agent」（⌥⌘3）显示本机的 Coding Agent 正在服务器上做什么，LiteMux 和 Agent 用的是同一套连接、同一批 tmux 会话：
+
+![Agent 同屏：本机 Claude Code 在 lab1 上起的训练，单击后只读旁观它的 tmux 会话，连接借用的是 Agent 自己的 ControlMaster](docs/screenshots/agent-watch.png)
+
+- **正在运行**：Claude Code、Codex、Antigravity、Cursor 等在本机起的 `ssh`（从进程树认出是哪个 Agent），去了哪台机器、跑的是什么命令、在哪个目录、碰了哪个 tmux 会话或日志文件。
+- **点一下旁观**：命令里有 tmux 会话就以只读方式挂上去（`tmux attach -r`，你的按键不会打扰它），右键可以「接管」；有日志文件就打开日志；否则在它工作的目录开一个终端。
+- **复用它的连接**：Agent 自己的 ControlMaster 还在、LiteMux 这边没连这台机器时，LiteMux 直接借它的套接字连上去，要密码或验证码的机器不用再登录一次。没见过的目标地址可以一键导入成书签。
+- **最近**：读取 Claude Code（`~/.claude/projects`）和 Codex（`~/.codex/sessions`）自己的会话记录，列出碰过服务器的每一条命令、Agent 写的说明、退出码和输出末尾；短到 `ps` 来不及看到的命令也不会漏。LiteMux Bridge 的调用也在同一条时间线上。只在本机读，可以在面板菜单里关掉。
+
+反过来，LiteMux 把你正在看的东西写在 `~/.config/litemux/focus.json`：接入 Bridge 的 Agent 调用 `get_user_focus`，就知道你说的「这个文件」「选中的这段」是哪里。编辑器右上角的引用按钮会复制 `主机:路径:行号` 加选中的代码，也可以直接粘贴给 Agent。
 
 ## 端口转发与 tmux 会话
 
