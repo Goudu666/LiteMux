@@ -122,6 +122,10 @@ final class AppModel {
                     FileHandle.standardError.write(Data("smoke: forgetting \(s.diagnosis?.forgetHostKeyArguments ?? [])\n".utf8))
                     s.forgetHostKeyAndReconnect()
                 }
+                for s in self.sessions.values where s.diagnosis?.offersColabUpdateFix == true {
+                    FileHandle.standardError.write(Data("smoke: fixing colab-cli for \(s.host.title)\n".utf8))
+                    s.disableColabUpdateCheckAndReconnect()
+                }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
                 guard let self else { return }

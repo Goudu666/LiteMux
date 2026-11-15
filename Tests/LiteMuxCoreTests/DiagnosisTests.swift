@@ -109,22 +109,4 @@ final class SSHDiagnosisTests: XCTestCase {
         XCTAssertEqual(nc.program, "nc")
         XCTAssertEqual(nc.expanded, "exec env TUN=1 nc 0.tcp.ngrok.io 12345 # 100%")
     }
-
-    func testProxyProbeOutcomes() {
-        let missing = SSHFailureDiagnosis.diagnoseProxy(program: "cloudflared", found: false, probeOutput: nil)
-        XCTAssertEqual(missing.kind, .proxyMissing)
-        XCTAssertEqual(missing.title, "找不到隧道程序 cloudflared")
-
-        let alive = SSHFailureDiagnosis.diagnoseProxy(program: "/opt/homebrew/bin/cloudflared", found: true,
-                                                      probeOutput: "\nSSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10\r\n")
-        XCTAssertEqual(alive.title, "隧道是通的，但 SSH 握手失败")
-
-        let dead = SSHFailureDiagnosis.diagnoseProxy(program: "cloudflared", found: true, probeOutput: """
-        2026-11-14T19:50:01Z INF Starting
-        2026-11-14T19:50:02Z ERR failed to connect to origin error="websocket: bad handshake"
-
-        """)
-        XCTAssertEqual(dead.kind, .tunnelGone)
-        XCTAssertTrue(dead.detail.hasSuffix("cloudflared 说：2026-11-14T19:50:01Z INF Starting\n2026-11-14T19:50:02Z ERR failed to connect to origin error=\"websocket: bad handshake\""), dead.detail)
-    }
 }

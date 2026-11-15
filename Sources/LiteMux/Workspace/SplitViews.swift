@@ -133,6 +133,7 @@ struct PaneView: View {
                                     diagnosis: session.diagnosis,
                                     reconnect: { session.restart(); model.focusSoon(pane.id) },
                                     forgetKey: { session.forgetHostKeyAndReconnect(); model.focusSoon(pane.id) },
+                                    fixColab: { session.disableColabUpdateCheckAndReconnect(); model.focusSoon(pane.id) },
                                     close: { model.closePane(pane.id, in: tab) })
                         .padding(10)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -163,6 +164,7 @@ struct ReconnectBanner: View {
     var diagnosis: SSHDiagnosis? = nil
     let reconnect: () -> Void
     var forgetKey: () -> Void = {}
+    var fixColab: () -> Void = {}
     let close: () -> Void
 
     var body: some View {
@@ -192,6 +194,14 @@ struct ReconnectBanner: View {
                             .controlSize(.small)
                             .fixedSize()
                             .help("ssh-keygen " + args.joined(separator: " "))
+                        }
+                        if diagnosis.offersColabUpdateFix {
+                            Button(action: fixColab) {
+                                Text("关掉 colab-cli 更新检查并重连").font(.system(size: 12, weight: .medium))
+                            }
+                            .controlSize(.small)
+                            .fixedSize()
+                            .help("在 ~/.config/colab-cli/settings.json 里写入 \"enable_update_check\": false")
                         }
                         reconnectButton
                     }
@@ -234,7 +244,7 @@ struct ReconnectBanner: View {
     private var icon: String {
         switch diagnosis?.kind {
         case .hostKeyChanged?: return "key.horizontal"
-        case .proxyMissing?, .tunnelGone?: return "point.3.connected.trianglepath.dotted"
+        case .proxyMissing?, .tunnelGone?, .tunnelWaiting?, .proxyNoise?: return "point.3.connected.trianglepath.dotted"
         case .authFailed?, .tooManyKeys?: return "lock"
         case .some: return "exclamationmark.triangle"
         case nil: return remote ? "bolt.horizontal.circle" : "checkmark.circle"

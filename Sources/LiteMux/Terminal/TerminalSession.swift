@@ -112,21 +112,18 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
         if let endpoint = host.endpoint {
             guard let hub else { return }
             try? hub.invocation.ensureControlDirectory()
-            var args = hub.invocation.terminalArguments(endpoint: endpoint,
-                                                        slot: usesTmux ? pane.slot : nil,
-                                                        directory: pane.directory,
-                                                        usesAskpass: host.hasSavedPassword,
-                                                        session: pane.session,
-                                                        readOnly: pane.readOnly == true)
-            if acceptNewHostKeyOnce {
-                // The user just chose to forget the stale key: take the new one without a second prompt.
-                args.insert(contentsOf: ["-o", "StrictHostKeyChecking=accept-new"], at: 1)
-                acceptNewHostKeyOnce = false
+            let cached = hub.cachedProxyTarget(host)
+            if cached.known {
+                launchSSH(endpoint, proxy: cached.target)
+            } else {
+                // One quick `ssh -G` first, so a ProxyCommand's stderr can be kept (see launchSSH).
+                Task { @MainActor [weak self] in
+                    guard let self, let hub = self.hub else { return }
+                    let target = await hub.resolveProxyTarget(self.host)
+                    guard self.phase == .running else { return }
+                    self.launchSSH(endpoint, proxy: target)
+                }
             }
-            let env = hub.environment(for: host)
-            view.startProcess(executable: SSHInvocation.sshPath, args: args,
-                              environment: ProcessRunner.environmentArray(env), execName: "ssh")
-            hub.watchForMaster(host)
         } else {
             let shell = ProcessRunner.loginShell
             let name = "-" + (shell as NSString).lastPathComponent
@@ -146,6 +143,39 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
         }
     }
 
+    /// The tunnel program behind this pane's connection, when there is one.
+    @ObservationIgnored private var proxy: SSHFailureDiagnosis.ProxyTarget?
+    @ObservationIgnored private var proxyLog: String?
+
+    private func launchSSH(_ endpoint: SSHEndpoint, proxy: SSHFailureDiagnosis.ProxyTarget?) {
+        guard let hub else { return }
+        var args = hub.invocation.terminalArguments(endpoint: endpoint,
+                                                    slot: usesTmux ? pane.slot : nil,
+                                                    directory: pane.directory,
+                                                    usesAskpass: host.hasSavedPassword,
+                                                    session: pane.session,
+                                                    readOnly: pane.readOnly == true)
+        if acceptNewHostKeyOnce {
+            // The user just chose to forget the stale key: take the new one without a second prompt.
+            args.insert(contentsOf: ["-o", "StrictHostKeyChecking=accept-new"], at: 1)
+            acceptNewHostKeyOnce = false
+        }
+        self.proxy = proxy
+        if let proxy {
+            // Under ControlPersist ssh sends the ProxyCommand's stderr to /dev/null. The same
+            // command with stderr kept in a file lets the failure banner say what the tunnel said.
+            let log = hub.proxyLogPath(host)
+            proxyLog = log
+            args.insert(contentsOf: ["-o", "ProxyCommand=" + proxy.loggingStderr(to: log)], at: 1)
+        } else {
+            proxyLog = nil
+        }
+        let env = hub.environment(for: host)
+        view.startProcess(executable: SSHInvocation.sshPath, args: args,
+                          environment: ProcessRunner.environmentArray(env), execName: "ssh")
+        hub.watchForMaster(host)
+    }
+
     func restart() {
         guard case .ended = phase else { return }
         view.feed(text: "\u{1b}[2J\u{1b}[H")
@@ -153,25 +183,44 @@ final class TerminalSession: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     /// With ControlMaster on, ssh hides the ProxyCommand's stderr, so a broken tunnel only says
-    /// "Connection closed by UNKNOWN port 65535". Resolve the ProxyCommand, check its program,
-    /// and run it once by hand to see what it says (or whether sshd's banner comes back).
+    /// "Connection closed by UNKNOWN port 65535". Read what the tunnel wrote during the connect
+    /// (launchSSH keeps it), check its program, and run it once by hand like ssh would.
     private func refineProxyDiagnosis(_ endpoint: SSHEndpoint) {
         guard let hub else { return }
-        let resolveArgs = ["-G"] + endpoint.arguments(home: hub.invocation.home)
         let env = hub.environment(for: host)
+        let started = startedAt ?? Date()
+        let knownProxy = proxy
+        let log = proxyLog
         Task { @MainActor [weak self] in
-            let r = await ProcessRunner.run(SSHInvocation.sshPath, resolveArgs, environment: env, timeout: 4)
-            guard let target = SSHFailureDiagnosis.proxyTarget(fromResolved: r.stdout),
-                  let program = target.program else { return }
+            guard let self, let hub = self.hub else { return }
+            var target = knownProxy
+            if target == nil { target = await hub.resolveProxyTarget(self.host) }
+            guard let target, let program = target.program else { return }
             let found = Self.isExecutable(program, path: env["PATH"] ?? "")
-            var probe: String?
-            if found {
-                let p = await ProcessRunner.run("/bin/sh", ["-c", "exec " + target.expanded], environment: env, timeout: 6)
-                probe = p.stderr + "\n" + p.stdout
+            var connectLog: String?
+            if let log, let attrs = try? FileManager.default.attributesOfItem(atPath: log),
+               let modified = attrs[.modificationDate] as? Date, modified >= started.addingTimeInterval(-1),
+               let data = FileManager.default.contents(atPath: log) {
+                connectLog = String(decoding: data.suffix(4096), as: UTF8.self)
             }
-            guard let self, case .ended = self.phase else { return }
-            self.diagnosis = SSHFailureDiagnosis.diagnoseProxy(program: program, found: found, probeOutput: probe)
-            Self.smokeLog("smoke: diagnosis \(self.diagnosis?.kind.rawValue ?? "none") (refined) \(self.diagnosis?.title ?? "")")
+            var probe: SSHFailureDiagnosis.ProxyProbe?
+            if found { probe = await ProxyProber.run(command: target.expanded, environment: env) }
+            guard case .ended = self.phase else { return }
+            self.diagnosis = SSHFailureDiagnosis.diagnoseProxy(program: program, found: found, probe: probe, connectLog: connectLog)
+            Self.smokeLog("smoke: diagnosis \(self.diagnosis?.kind.rawValue ?? "none") (refined) \(self.diagnosis?.title ?? "") colabFix=\(self.diagnosis?.offersColabUpdateFix == true) log=\(connectLog?.trimmingCharacters(in: .whitespacesAndNewlines).count ?? -1)")
+            if let d = self.diagnosis { Self.smokeLog("smoke: detail \(d.detail.replacingOccurrences(of: "\n", with: " | "))") }
+        }
+    }
+
+    /// colab-cli's update notice: turn the check off (its own suggestion), then connect again.
+    func disableColabUpdateCheckAndReconnect() {
+        do {
+            let file = try ColabCLISettings.disableUpdateCheck()
+            Self.smokeLog("smoke: colab settings written \(file)")
+            restart()
+        } catch {
+            let dim = "\u{1b}[2m", reset = "\u{1b}[0m"
+            view.feed(text: "\(dim)没能修改 \(ColabCLISettings.path())：\(error)。可以手动加上 \"enable_update_check\": false\(reset)\r\n")
         }
     }
 

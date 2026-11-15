@@ -16,6 +16,10 @@ public struct SSHDiagnosis: Equatable, Sendable {
         case timeout
         case tooManyKeys
         case authFailed
+        /// The tunnel program wrote text into the SSH stream after sshd's banner.
+        case proxyNoise
+        /// The tunnel program kept running but sshd never answered (often: waiting for a login).
+        case tunnelWaiting
     }
 
     public var kind: Kind
@@ -27,6 +31,8 @@ public struct SSHDiagnosis: Equatable, Sendable {
     public var knownHostsName: String?
     /// `hostKeyChanged`: the known_hosts file ssh complained about, when it said.
     public var knownHostsFile: String?
+    /// colab-cli printed its update notice: offer to turn the check off.
+    public var offersColabUpdateFix = false
 
     /// `ssh-keygen` arguments that forget the stale key (ssh-keygen keeps a `.old` backup).
     public var forgetHostKeyArguments: [String]? {
@@ -156,12 +162,27 @@ public enum SSHFailureDiagnosis {
         }
 
         /// The program the ProxyCommand starts (skipping `exec`, `env` and assignments).
-        public var program: String? {
+        public var program: String? { Self.program(of: command) }
+
+        static func program(of command: String, depth: Int = 0) -> String? {
             var words = ShellWords.split(command)
             while let w = words.first, w == "exec" || w == "env" || ShellScan.isAssignment(w) {
                 words.removeFirst()
             }
-            return words.first
+            guard let first = words.first else { return nil }
+            let shells: Set<String> = ["sh", "bash", "zsh", "dash"]
+            let base = first.split(separator: "/").last.map(String.init) ?? first
+            if shells.contains(base), depth < 3, let c = words.firstIndex(where: { $0 == "-c" || $0 == "-lc" || $0 == "-ec" }),
+               c + 1 < words.count, let inner = program(of: words[c + 1], depth: depth + 1) {
+                return inner
+            }
+            return first
+        }
+
+        /// The ProxyCommand with its stderr sent to `log`, so LiteMux can show what the tunnel
+        /// said (ssh sends it to /dev/null under ControlPersist). ssh prefixes `exec `.
+        public func loggingStderr(to log: String) -> String {
+            "sh -c " + ShellWords.quote(command) + " 2>" + ShellWords.quote(log)
         }
     }
 
@@ -185,8 +206,72 @@ public enum SSHFailureDiagnosis {
         return ProxyTarget(command: command, host: host, port: port, user: user)
     }
 
-    /// What running the tunnel by hand showed.
-    public static func diagnoseProxy(program: String, found: Bool, probeOutput: String?) -> SSHDiagnosis {
+    /// What running the tunnel by hand showed, with stdin kept open like ssh does.
+    public struct ProxyProbe: Equatable, Sendable {
+        /// stdout lines before sshd's `SSH-2.0-…` line (allowed by RFC 4253, ssh skips them).
+        public var beforeBanner: String
+        /// Text that arrived after the banner although the server should wait for our ident:
+        /// it ends up inside the SSH packet stream.
+        public var noise: String
+        public var stderr: String
+        public var sawBanner: Bool
+        public var timedOut: Bool
+        public var exitCode: Int32?
+
+        public init(beforeBanner: String = "", noise: String = "", stderr: String = "",
+                    sawBanner: Bool = false, timedOut: Bool = false, exitCode: Int32? = nil) {
+            self.beforeBanner = beforeBanner
+            self.noise = noise
+            self.stderr = stderr
+            self.sawBanner = sawBanner
+            self.timedOut = timedOut
+            self.exitCode = exitCode
+        }
+
+        /// Splits raw stdout around the banner. A binary packet after the banner (some servers
+        /// send KEXINIT at once) starts with a 0x00 length byte and is not noise.
+        public static func from(stdout: [UInt8], stderr: [UInt8], timedOut: Bool, exitCode: Int32?) -> ProxyProbe {
+            var probe = ProxyProbe(stderr: String(decoding: stderr, as: UTF8.self), timedOut: timedOut, exitCode: exitCode)
+            var lineStart = 0
+            var before: [String] = []
+            var i = 0
+            while i < stdout.count {
+                if stdout[i] == 0x0A {
+                    let line = String(decoding: stdout[lineStart..<i], as: UTF8.self)
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+                    if line.hasPrefix("SSH-") {
+                        probe.sawBanner = true
+                        let rest = Array(stdout[(i + 1)...])
+                        if let first = rest.first, first != 0 {
+                            let printable = rest.prefix { $0 == 0x0A || $0 == 0x0D || $0 == 0x09 || $0 >= 0x20 }
+                            probe.noise = String(decoding: printable, as: UTF8.self)
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                        break
+                    }
+                    if !line.trimmingCharacters(in: .whitespaces).isEmpty { before.append(line) }
+                    lineStart = i + 1
+                }
+                i += 1
+            }
+            if !probe.sawBanner, lineStart < stdout.count {
+                let tail = String(decoding: stdout[lineStart...], as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !tail.isEmpty { before.append(tail) }
+            }
+            probe.beforeBanner = before.joined(separator: "\n")
+            return probe
+        }
+    }
+
+    /// colab-cli's own update notice ("Run 'colab update' to update", "enable_update_check").
+    public static func isColabUpdateNotice(_ line: String) -> Bool {
+        let l = line.lowercased()
+        return l.contains("colab update") || l.contains("enable_update_check")
+    }
+
+    /// Combines the stderr LiteMux recorded during the real connection (`connectLog`) with
+    /// running the tunnel once by hand (`probe`).
+    public static func diagnoseProxy(program: String, found: Bool, probe: ProxyProbe?, connectLog: String? = nil) -> SSHDiagnosis {
         let name = program.split(separator: "/").last.map(String.init) ?? program
         if !found {
             return SSHDiagnosis(
@@ -194,22 +279,63 @@ public enum SSHFailureDiagnosis {
                 title: "找不到隧道程序 \(name)",
                 detail: "ProxyCommand 要用到它。LiteMux 会在登录 Shell 的 PATH、/opt/homebrew/bin、/usr/local/bin、~/.local/bin 里找；装在别处的话，把 ProxyCommand 里的 \(name) 换成完整路径。")
         }
-        let output = probeOutput ?? ""
-        if output.contains("SSH-2.0-") || output.contains("SSH-1.99-") {
-            return SSHDiagnosis(
+        let probe = probe ?? ProxyProbe()
+        let everything = [connectLog ?? "", probe.beforeBanner, probe.noise, probe.stderr].joined(separator: "\n")
+        let colab = everything.components(separatedBy: .newlines).contains(where: isColabUpdateNotice)
+
+        var d: SSHDiagnosis
+        if probe.sawBanner && !probe.noise.isEmpty {
+            let colabNoise = probe.noise.components(separatedBy: .newlines).contains(where: isColabUpdateNotice)
+            d = SSHDiagnosis(
+                kind: .proxyNoise,
+                title: colabNoise ? "colab-cli 的更新提示混进了 SSH 数据" : "隧道程序往 SSH 数据里混了文字",
+                detail: (colabNoise
+                    ? "colab-cli 检查更新后把提示打到了标准输出，而 ProxyCommand 的标准输出就是 SSH 的数据通道，连接因此断开。关掉更新检查（或在终端里跑 colab update）后重连。"
+                    : "sshd 的应答后面跟了一段文字，SSH 会把它当成协议数据而断开。让 \(name) 把提示打到 stderr，或关掉这些提示。")
+                    + "\n混进来的内容：" + clip(probe.noise))
+        } else if probe.sawBanner {
+            d = SSHDiagnosis(
                 kind: .tunnelGone,
                 title: "隧道是通的，但 SSH 握手失败",
                 detail: "手动跑了一次 \(name)，对面的 sshd 有应答。可能是隧道刚恢复，先点「重新连接」；还不行的话检查用户名，以及 sshd 是否允许这种登录方式。")
+        } else if probe.timedOut {
+            d = SSHDiagnosis(
+                kind: .tunnelWaiting,
+                title: "隧道一直没有接通",
+                detail: "\(name) 还在运行，但对面的 sshd 一直没有应答：可能在等你登录授权（先在系统终端里 ssh 一次完成授权），或者 Colab 运行时还在启动、已经断开。")
+        } else {
+            var detail = "SSH 收不到对面 sshd 的应答。Colab / Kaggle 的运行时断开或重启后隧道会失效：重新运行 notebook 里的隧道单元，确认 sshd 在跑，再用新地址连。"
+            if let code = probe.exitCode, code != 0 { detail += "（\(name) 退出码 \(code)）" }
+            d = SSHDiagnosis(kind: .tunnelGone, title: "隧道另一头没有响应", detail: detail)
         }
-        let tail = output.components(separatedBy: .newlines)
+
+        if let said = tail(connectLog) {
+            d.detail += "\n连接时 \(name) 说：" + said
+        } else if let said = tail([probe.stderr, probe.beforeBanner].joined(separator: "\n")), d.kind != .proxyNoise {
+            d.detail += "\n\(name) 说：" + said
+        }
+        if colab {
+            d.offersColabUpdateFix = true
+            if d.kind != .proxyNoise {
+                d.detail += "\ncolab-cli 每次都会打印更新提示，可以一键关掉，免得它混进连接。"
+            }
+        }
+        return d
+    }
+
+    /// The last two meaningful lines, without colab-cli's update notice.
+    static func tail(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let lines = text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty && !isColabUpdateNotice($0) }
             .suffix(2)
-            .map { $0.count > 160 ? String($0.prefix(160)) + "…" : $0 }
-            .joined(separator: "\n")
-        var detail = "SSH 收不到对面 sshd 的应答。Colab / Kaggle 的运行时断开或重启后隧道会失效：重新运行 notebook 里的隧道单元，确认 sshd 在跑，再用新地址连。"
-        if !tail.isEmpty { detail += "\n\(name) 说：\(tail)" }
-        return SSHDiagnosis(kind: .tunnelGone, title: "隧道另一头没有响应", detail: detail)
+            .map(clip)
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    private static func clip(_ s: String) -> String {
+        s.count > 160 ? String(s.prefix(160)) + "…" : s
     }
 
     // MARK: - Details
