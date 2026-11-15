@@ -1,0 +1,6 @@
+smoke: diagnosis none 
+smoke: diagnosis proxyNoise (refined) colab-cli 的更新提示混进了 SSH 数据 colabFix=true log=0
+smoke: detail colab-cli 检查更新后把提示打到了标准输出，而 ProxyCommand 的标准输出就是 SSH 的数据通道，连接因此断开。关掉更新检查（或在终端里跑 colab update）后重连。 | 混进来的内容：[colab] To silence this check, set "enable_update_check": false in ~/.config/colab-cli/settings.json
+smoke: fixing colab-cli for colab-cli
+smoke: colab settings written /Users/runner/.config/colab-cli/settings.json
+smoke: after fix colab-cli phase=running diagnosis=none

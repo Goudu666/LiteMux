@@ -1,0 +1,7 @@
+smoke: diagnosis tunnelGone 
+smoke: diagnosis proxyMissing (refined) 找不到隧道程序 cloudflared colabFix=false log=34
+smoke: detail ProxyCommand 要用到它。LiteMux 会在登录 Shell 的 PATH、/opt/homebrew/bin、/usr/local/bin、~/.local/bin 里找；装在别处的话，把 ProxyCommand 里的 cloudflared 换成完整路径。
+smoke: diagnosis hostKeyChanged 127.0.0.1
+smoke: forgetting ["-R", "127.0.0.1", "-f", "/Users/runner/.ssh/known_hosts"]
+smoke: after fix colab phase=ended(code: Optional(255)) diagnosis=proxyMissing
+smoke: after fix autodl-重建后 phase=running diagnosis=none

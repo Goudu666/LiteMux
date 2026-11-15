@@ -1,0 +1,458 @@
+>>> initialize
+{
+  "capabilities": {
+    "tools": {
+      "listChanged": false
+    }
+  },
+  "instructions": "LiteMux is the user's SSH/tmux workbench for GPU training servers. These tools reach the servers the user has open in LiteMux, through LiteMux's own SSH connections (saved passwords included). Start with list_hosts. read_terminal and training_status read what the user's terminal panes show (LiteMux panes are tmux sessions named lm_1, lm_2, …; other tmux sessions work by name); host_status shows GPUs, memory, disks, ports and services. Prefer reading before acting. Long jobs (training) belong in a term
+    ok: server introduces itself
+>>> tools/list
+    list_hosts, get_user_focus, read_terminal, training_status, host_status, list_directory, read_file, download_file, run_command, send_to_terminal, write_file, edit_file, upload_file
+    ok: all tools listed in trusted mode
+    ok: v0.3 tools listed, gpu_status only as an alias
+bridge: call list_hosts {}
+bridge: exec /usr/bin/ssh 38192 root@connect.westb.seetacloud.com
+bridge: exec /usr/bin/ssh check lab1
+bridge: exec /usr/bin/ssh check gpu-a100
+bridge: exec /usr/bin/ssh check jp-proxy
+bridge: exec /bin/sh -c echo "@@now $(date +%s)"
+T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bi
+bridge: done status=255 out=0B err=115B timedOut=false 0.02s
+bridge: done status=255 out=0B err=115B timedOut=false 0.03s
+bridge: done status=0 out=0B err=27B timedOut=false 0.03s
+bridge: exec /usr/bin/ssh lab1 sh -c 'echo "@@now $(date +%s)"
+T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/ho
+bridge: done status=255 out=0B err=115B timedOut=false 0.03s
+bridge: done status=0 out=95B err=0B timedOut=false 0.04s
+bridge: done status=0 out=95B err=0B timedOut=false 0.10s
+
+>>> list_hosts {}
+LiteMux 主机（● 已连接）
+○ autodl-westb-38192  [id: bookmark:EC3621C2-9503-4C3C-B7AA-2EBBAF9D8664]  书签 · root@connect.westb.seetacloud.com:38192 · 未连接（调用工具时用密钥直连）
+● lab1  [id: config:lab1]  ssh config · lab1.local · runner@localhost · ← LiteMux 当前标签页
+    tmux 会话：
+      lm_1 · bash · /Users/runner/exp · 刚刚有输出 · LiteMux 窗格
+      lm_2 · bash · /Users/runner · 刚刚有输出 · LiteMux 窗格
+○ gpu-a100  [id: config:gpu-a100]  ssh config · goudu@10.255.0.12:2222 · 未连接（调用工具时用密钥直连）
+○ jp-proxy  [id: config:jp-proxy]  ssh config · 203.0.113.7 · 未连接（调用工具时用密钥直连）
+● Local Mac  [id: local]  本机
+    tmux 会话：
+      lm_1 · bash · /Users/runner/exp · 刚刚有输出
+      lm_2 · bash · /Users/runner · 刚刚有输出
+    ok: list_hosts sees the host and its lm_1 pane
+bridge: call read_terminal {"host":"lab1","lines":25,"session":"lm_1"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=2507B err=0B timedOut=false 0.07s
+
+>>> read_terminal {"host": "lab1", "session": "lm_1", "lines": 25}
+lab1 · tmux lm_1 · 最近 25 行
+────────
+Epoch  8/60  loss=1.1595  acc=0.6249  val_loss=1.3342  val_acc=0.5894  lr=2.9e-04
+Epoch  9/60  loss=1.0848  acc=0.6627  val_loss=1.2594  val_acc=0.6344  lr=2.8e-04
+Epoch 10/60  loss=0.9837  acc=0.7056  val_loss=1.1335  val_acc=0.6847  lr=2.8e-04
+Epoch 11/60  loss=0.9124  acc=0.7313  val_loss=1.0593  val_acc=0.6937  lr=2.8e-04
+Epoch 12/60  loss=0.8283  acc=0.7531  val_loss=0.9476  val_acc=0.7189  lr=2.7e-04
+Epoch 13/60  loss=0.8119  acc=0.7811  val_loss=0.9481  val_acc=0.7535  lr=2.7e-04
+Epoch 14/60  loss=0.7463  acc=0.7976  val_loss=0.8831  val_acc=0.7715  lr=2.6e-04
+Epoch 15/60  loss=0.6925  acc=0.8270  val_loss=0.7946  val_acc=0.7962  lr=2.6e-04
+Epoch 16/60  loss=0.6151  acc=0.8415  val_loss=0.7342  val_acc=0.8199  lr=2.5e-04
+Epoch 17/60  loss=0.5676  acc=0.8674  val_loss=0.6689  val_acc=0.8438  lr=2.4e-04
+Epoch 18/60  loss=0.5524  acc=0.8744  val_loss=0.6803  val_acc=0.8543  lr=2.4e-04
+Epoch 19/60  loss=0.5154  acc=0.8833  val_loss=0.6129  val_acc=0.8526  lr=2.3e-04
+Epoch 20/60  loss=0.4725  acc=0.9030  val_loss=0.5898  val_acc=0.8760  lr=2.3e-04
+Epoch 21/60  loss=0.4602  acc=0.9157  val_loss=0.5488  val_acc=0.8903  lr=2.2e-04
+Epoch 22/60  loss=0.4275  acc=0.9120  val_loss=0.5226  val_acc=0.8738  lr=2.1e-04
+Epoch 23/60  loss=0.4009  acc=0.9340  val_loss=0.4971  val_acc=0.9038  lr=2.0e-04
+Epoch 24/60  loss=0.3496  acc=0.9313  val_loss=0.4238  val_acc=0.9042  lr=2.0e-04
+Epoch 25/60  loss=0.3418  acc=0.9380  val_loss=0.4116  val_acc=0.9003  lr=1.9e-04
+Epoch 26/60  loss=0.3061  acc=0.9423  val_loss=0.4108  val_acc=0.9140  lr=1.8e-04
+Epoch 27/60  loss=0.2843  acc=0.9464  val_loss=0.3544  val_acc=0.9253  lr=1.7e-04
+Epoch 28/60  loss=0.2761  acc=0.9457  val_loss=0.3435  val_acc=0.9119  lr=1.7e-04
+Epoch 29/60  loss=0.2892  acc=0.9621  val_loss=0.3584  val_acc=0.9222  lr=1.6e-04
+Epoch 30/60  loss=0.2477  acc=0.9580  val_loss=0.3200  val_acc=0.9377  lr=1.5e-04
+Epoch 31/60  loss=0.2713  acc=0.9560  val_loss=0.3306  val_acc=0.9328  lr=1.4e-04
+Epoch 32/60  loss=0.2388  acc=0.9575  val_loss=0.3227  val_acc=0.9181  lr=1.3e-04
+    ok: read_terminal returns the training log
+bridge: call training_status {"host":"lab1","session":"1"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=7712B err=0B timedOut=false 0.07s
+
+>>> training_status {"host": "lab1", "session": "1"}
+lab1 · tmux lm_1
+状态：训练中 · epoch 33/60 · 55%
+指标（最新 · 最佳 · 趋势）：
+  loss      0.2174  · 最佳 0.2174  · ↓ 在变好
+  val_loss  0.3007  · 最佳 0.3007  · ↓ 在变好
+  acc       0.9664  · 最佳 0.9664  · ↑ 在变好
+  val_acc   0.9379  · 最佳 0.9379  · ↑ 在变好
+  lr        1.30e-04
+loss 曲线（x: y）：1: 2.1367, 2: 1.9310, 4: 1.6355, 5: 1.4773, 7: 1.2651, 8: 1.1595, 9: 1.0848, 11: 0.9124, 12: 0.8283, 14: 0.7463, 15: 0.6925, 16: 0.6151, 18: 0.5524, 19: 0.5154, 20: 0.4725, 22: 0.4275, 23: 0.4009, 25: 0.3418, 26: 0.3061, 27: 0.2843, 29: 0.2892, 30: 0.2477, 32: 0.2388, 33: 0.2174
+上一次运行：已结束 · epoch 60/60 · 100% · loss 最终 0.2222，最佳 0.2086
+    ok: training_status recognises the run
+bridge: call gpu_status {"host":"lab1"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'echo '\''## gpu'\''
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi --query-gpu=index,name,utili
+bridge: done status=0 out=2132B err=0B timedOut=false 0.18s
+
+>>> gpu_status {"host": "lab1"}
+lab1
+没有 nvidia-smi（这台机器可能没有 NVIDIA GPU）。
+负载：17:38  up 7 mins, 1 user, load averages: 5.79 19.75 14.70（3 核）
+最忙的进程（pid · CPU% · 内存% · 运行时长 · 程序）：
+  9677 · 14.9% · 0.5% · 00:01 · ./build/LiteMux.app/Contents/MacOS/LiteMux
+  2537 · 12.8% · 1.4% · 03:49 · /Users/runner/actions-runner/cached/bin/Runner.Worker
+  158 · 12.5% · 0.9% · 07:05 · /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+  126 · 5.3% · 0.4% · 07:05 · /usr/libexec/opendirectoryd
+  9673 · 4.4% · 0.3% · 00:01 · /opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python
+  9731 · 2.5% · 0.0% · 00:01 · sh
+磁盘：
+  / · 可用 96Gi / 320Gi（已用 11%）
+  /private/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.UdYQfM · 可用 72Mi / 2.1Gi（已用 97%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/iOS_23F77 · 可用 561Mi / 23Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/watchOS_23S303 · 可用 318Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/watchOS_23T570 · 可用 328Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/tvOS_23L243a · 可用 309Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/iOS_23E254a · 可用 564Mi / 22Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/xrOS_23O249a · 可用 479Mi / 19Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/xrOS_23N301 · 可用 467Mi / 19Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/tvOS_23L470 · 可用 310Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/watchOS_23T240b · 可用 329Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/iOS_23C54 · 可用 550Mi / 22Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/tvOS_23K51 · 可用 304Mi / 11Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/xrOS_23O470 · 可用 478Mi / 19Gi（已用 98%） ⚠️ 快满了
+    ok: gpu_status (alias) reports load (no GPU on CI)
+bridge: call host_status {"host":"lab1"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'echo '\''## gpu'\''
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi --query-gpu=index,name,utili
+bridge: done status=0 out=2230B err=0B timedOut=false 0.16s
+
+>>> host_status {"host": "lab1"}
+lab1
+没有 nvidia-smi（这台机器可能没有 NVIDIA GPU）。
+负载：17:38  up 7 mins, 1 user, load averages: 5.79 19.75 14.70（3 核）
+最忙的进程（pid · CPU% · 内存% · 运行时长 · 程序）：
+  9772 · 5.2% · 0.1% · 00:00 · /usr/bin/ssh
+  4757 · 2.8% · 0.4% · 02:17 · /System/Library/PrivateFrameworks/HelpData.framework/Versions/A/Resources/helpd
+  3353 · 2.5% · 0.3% · 03:10 · /usr/libexec/swtransparencyd
+  9677 · 2.4% · 0.5% · 00:02 · ./build/LiteMux.app/Contents/MacOS/LiteMux
+  2537 · 1.3% · 1.4% · 03:50 · /Users/runner/actions-runner/cached/bin/Runner.Worker
+  114 · 1.2% · 0.6% · 07:06 · /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds
+磁盘：
+  / · 可用 96Gi / 320Gi（已用 11%）
+  /private/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.UdYQfM · 可用 72Mi / 2.1Gi（已用 97%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/iOS_23F77 · 可用 561Mi / 23Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/watchOS_23S303 · 可用 318Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/watchOS_23T570 · 可用 328Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/tvOS_23L243a · 可用 309Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/iOS_23E254a · 可用 564Mi / 22Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/xrOS_23O249a · 可用 479Mi / 19Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/xrOS_23N301 · 可用 467Mi / 19Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/tvOS_23L470 · 可用 310Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/watchOS_23T240b · 可用 329Mi / 12Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/iOS_23C54 · 可用 550Mi / 22Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/tvOS_23K51 · 可用 304Mi / 11Gi（已用 98%） ⚠️ 快满了
+  /Library/Developer/CoreSimulator/Volumes/xrOS_23O470 · 可用 478Mi / 19Gi（已用 98%） ⚠️ 快满了
+监听端口：
+  6006 · TensorBoard（Python pid 9761） · 仅本机
+    ok: host_status reports load and mounts
+    ok: host_status lists the listening port 6006
+bridge: call training_status {"host":"lab1","log_path":"~/exp/train.log"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/train.log
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是一个目录：$P，请用 
+bridge: done status=0 out=974B err=0B timedOut=false 0.06s
+
+>>> training_status {"host": "lab1", "log_path": "~/exp/train.log"}
+lab1 · ~/exp/train.log
+状态：训练中 · epoch 12/30 · 40%
+指标（最新 · 最佳 · 趋势）：
+  loss  0.1667  · 最佳 0.1667  · ↓ 在变好
+  acc   0.9231  · 最佳 0.9231  · ↑ 在变好
+  lr    3.00e-04
+loss 曲线（x: y）：1: 2.0000, 2: 1.0000, 3: 0.6667, 4: 0.5000, 5: 0.4000, 6: 0.3333, 7: 0.2857, 8: 0.2500, 9: 0.2222, 10: 0.2000, 11: 0.1818, 12: 0.1667
+    ok: training_status reads a log file (log_path)
+bridge: call list_directory {"host":"lab1","path":"~/exp"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp
+cd -- "$P" 2>/dev/null || { echo "不是可进入的目录：$P" >&2; exit 2; }
+pwd
+ls -lA 2>&1 | head -n 1000
+'
+bridge: done status=0 out=256B err=0B timedOut=false 0.06s
+
+>>> list_directory {"host": "lab1", "path": "~/exp"}
+lab1:/Users/runner/exp
+total 32
+-rw-r--r--  1 runner  staff   75 Nov 15 17:37 config.yaml
+-rw-r--r--  1 runner  staff  882 Nov 15 17:37 mask_0001.png
+-rw-r--r--  1 runner  staff  960 Nov 15 17:38 train.log
+-rw-r--r--  1 runner  staff   15 Nov 15 17:37 train.py
+
+    ok: list_directory
+bridge: call read_file {"host":"lab1","path":"~/exp/config.yaml"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/config.yaml
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是一个目录：$P，请
+bridge: done status=0 out=88B err=0B timedOut=false 0.06s
+
+>>> read_file {"host": "lab1", "path": "~/exp/config.yaml"}
+lab1:~/exp/config.yaml · 75 字节
+────────
+seed: 42
+batch_size: 64
+lr: 3e-4
+model:
+  name: vit_b16
+  pretrained: true
+
+    ok: read_file
+bridge: call read_file {"end_line":3,"host":"lab1","path":"~/exp/config.yaml","start_line":2}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/config.yaml
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是一个目录：$P，请
+bridge: done status=0 out=39B err=0B timedOut=false 0.06s
+
+>>> read_file {"host": "lab1", "path": "~/exp/config.yaml", "start_line": 2, "end_line": 3}
+lab1:~/exp/config.yaml · 75 字节 · 第 2–3 行（共 6 行）
+────────
+batch_size: 64
+lr: 3e-4
+
+    ok: read_file returns a line range
+bridge: call read_file {"host":"lab1","path":"~/exp/mask_0001.png"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/mask_0001.png
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是一个目录：$P
+bridge: done status=0 out=896B err=0B timedOut=false 0.04s
+
+>>> read_file {"host": "lab1", "path": "~/exp/mask_0001.png"}  [isError]
+~/exp/mask_0001.png 是二进制文件（882 字节），不能当文本读取。需要的话用 download_file 下载到本机。
+    ok: read_file refuses a PNG
+bridge: call run_command {"command":"echo hello-from-agent; uname -s","cwd":"~/exp","host":"lab1"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'cd -- "$HOME"/exp || exit 125
+if command -v bash >/dev/null 2>&1; then exec bash -lc '\''echo hello-from-age
+bridge: done status=0 out=24B err=0B timedOut=false 0.12s
+
+>>> run_command {"host": "lab1", "command": "echo hello-from-agent; uname -s", "cwd": "~/exp"}
+lab1 · 退出码 0 · 0.1 秒
+──── stdout ────
+hello-from-agent
+Darwin
+    ok: run_command
+bridge: call run_command {"command":"exit 7","host":"lab1"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'if command -v bash >/dev/null 2>&1; then exec bash -lc '\''exit 7'\'' </dev/null; else exec sh -c '\''exit 7
+bridge: done status=7 out=0B err=0B timedOut=false 0.10s
+
+>>> run_command {"host": "lab1", "command": "exit 7"}  [isError]
+lab1 · 退出码 7 · 0.1 秒
+（没有输出）
+    ok: run_command reports a failing exit code
+bridge: call write_file {"content":"written by an agent\n","host":"lab1","path":"~/agent-scratch/notes/agent.txt"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/notes/agent.txt
+D=$(dirname -- "$P")
+mkdir -p -- "$D" || exit 2
+if printf '\''YQ=='\
+bridge: done status=0 out=3B err=0B timedOut=false 0.09s
+
+>>> write_file {"host": "lab1", "path": "~/agent-scratch/notes/agent.txt", "content": "written by an agent\n"}
+已写入 lab1:~/agent-scratch/notes/agent.txt（文件现在 20 字节）。
+    ok: write_file creates parent directories
+bridge: call read_file {"host":"lab1","path":"~/agent-scratch/notes/agent.txt"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/notes/agent.txt
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { ech
+bridge: done status=0 out=33B err=0B timedOut=false 0.05s
+
+>>> read_file {"host": "lab1", "path": "~/agent-scratch/notes/agent.txt"}
+lab1:~/agent-scratch/notes/agent.txt · 20 字节
+────────
+written by an agent
+
+    ok: the written file reads back
+bridge: call edit_file {"host":"lab1","new_text":"epochs=20","old_text":"epochs=10","path":"~/agent-scratch/edit_me.sh"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/edit_me.sh
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是
+bridge: done status=0 out=68B err=0B timedOut=false 0.08s
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/edit_me.sh.lm-edit
+D=$(dirname -- "$P")
+mkdir -p -- "$D" || exit 2
+if printf '\''YQ=
+bridge: done status=0 out=3B err=0B timedOut=false 0.07s
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/edit_me.sh
+N="$HOME"/agent-scratch/edit_me.sh.lm-edit
+if [ "$(cksum < "$P")" != '\''
+bridge: done status=0 out=3B err=0B timedOut=false 0.08s
+
+>>> edit_file {"host": "lab1", "path": "~/agent-scratch/edit_me.sh", "old_text": "epochs=10", "new_text": "epochs=20"}
+已修改 lab1:~/agent-scratch/edit_me.sh，1 处替换（文件现在 44 字节，权限不变）。
+@@ 第 3 行
+  #!/bin/sh
+  lr=0.1
+- epochs=10
++ epochs=20
+  lr=0.1
+  echo done
+    ok: edit_file replaces a unique match and shows a diff
+    ok: edit_file wrote exactly the change
+    ok: edit_file kept the file mode
+    ok: edit_file left no staging file
+bridge: call edit_file {"host":"lab1","new_text":"lr=0.2","old_text":"lr=0.1","path":"~/agent-scratch/edit_me.sh"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/edit_me.sh
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是
+bridge: done status=0 out=68B err=0B timedOut=false 0.07s
+
+>>> edit_file {"host": "lab1", "path": "~/agent-scratch/edit_me.sh", "old_text": "lr=0.1", "new_text": "lr=0.2"}  [isError]
+old_text 在文件里出现了 2 次（第 2 行、第 4 行）。多带几行上下文让它唯一，或者设 replace_all:true 全部替换。
+    ok: edit_file refuses an ambiguous match
+bridge: call edit_file {"host":"lab1","new_text":"x","old_text":"nope","path":"~/agent-scratch/edit_me.sh"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/edit_me.sh
+[ -e "$P" ] || { echo "文件不存在：$P" >&2; exit 2; }
+[ -d "$P" ] && { echo "这是
+bridge: done status=0 out=68B err=0B timedOut=false 0.08s
+
+>>> edit_file {"host": "lab1", "path": "~/agent-scratch/edit_me.sh", "old_text": "nope", "new_text": "x"}  [isError]
+文件里找不到 old_text。先用 read_file 看看当前内容，按原样复制要替换的片段。
+    ok: edit_file reports a missing match
+bridge: call download_file {"host":"lab1","local_path":"/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb","path":"~/exp/mask_0001.png"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/mask_0001.png
+[ -e "$P" ] || { echo "不存在：$P" >&2; exit 2; }
+[ -r "$P" ] || { echo "没有读取权限：$P" 
+bridge: done status=0 out=9B err=0B timedOut=false 0.06s
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/mask_0001.png
+cat -- "$P"
+'
+bridge: done status=0 out=0B err=0B timedOut=false 0.05s
+
+>>> download_file {"host": "lab1", "path": "~/exp/mask_0001.png", "local_path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb"}
+已把 lab1:~/exp/mask_0001.png 下载到 /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/mask_0001.png（882 字节，0.0 秒）。
+    ok: download_file copies a binary file exactly
+bridge: call download_file {"host":"lab1","local_path":"/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb","path":"~/exp/mask_0001.png"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp/mask_0001.png
+[ -e "$P" ] || { echo "不存在：$P" >&2; exit 2; }
+[ -r "$P" ] || { echo "没有读取权限：$P" 
+bridge: done status=0 out=9B err=0B timedOut=false 0.06s
+
+>>> download_file {"host": "lab1", "path": "~/exp/mask_0001.png", "local_path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb"}  [isError]
+本机已经有 /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/mask_0001.png。设 overwrite:true 覆盖，或者换个 local_path。
+    ok: download_file will not overwrite without asking
+bridge: call download_file {"host":"lab1","local_path":"/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy","path":"~/exp"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp
+[ -e "$P" ] || { echo "不存在：$P" >&2; exit 2; }
+[ -r "$P" ] || { echo "没有读取权限：$P" >&2; exit 2; }
+bridge: done status=0 out=4B err=0B timedOut=false 0.05s
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/exp
+cd -- "$P" || exit 2
+COPYFILE_DISABLE=1 tar -czf - . || exit 2
+'
+bridge: done status=0 out=0B err=0B timedOut=false 0.07s
+bridge: exec /usr/bin/tar -C /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy
+bridge: done status=0 out=0B err=0B timedOut=false 0.01s
+
+>>> download_file {"host": "lab1", "path": "~/exp", "local_path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy"}
+已把 lab1:~/exp 下载到 /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy（4 个文件，共 2 KB，传输 10 KB 压缩包，0.1 秒）。
+    ok: download_file brings a folder over as one tar stream
+bridge: call upload_file {"host":"lab1","local_path":"/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/blob.bin","path":"~/agent-scratch/up/"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/up/blob.bin
+D=$(dirname -- "$P")
+mkdir -p -- "$D" || exit 2
+cat > "$P.lm-part" && mv
+bridge: done status=0 out=7B err=0B timedOut=false 0.08s
+
+>>> upload_file {"host": "lab1", "local_path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/blob.bin", "path": "~/agent-scratch/up/"}
+已把 /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/blob.bin 上传到 lab1:~/agent-scratch/up/blob.bin（300 KB，0.1 秒）。
+    ok: upload_file copies a binary file exactly
+bridge: call upload_file {"host":"lab1","local_path":"/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy","path":"~/agent-scratch/exp-up"}
+bridge: exec /usr/bin/tar /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy .
+bridge: done status=0 out=0B err=0B timedOut=false 0.01s
+bridge: exec /usr/bin/ssh lab1 sh -c 'P="$HOME"/agent-scratch/exp-up
+mkdir -p -- "$P" || exit 2
+tar -xzf - -C "$P" || exit 2
+du -sk "$P" 2>/dev/nu
+bridge: done status=0 out=3B err=0B timedOut=false 0.07s
+
+>>> upload_file {"host": "lab1", "local_path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy", "path": "~/agent-scratch/exp-up"}
+已把 /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/lm-transfer-wr1muztb/exp-copy 上传到 lab1:~/agent-scratch/exp-up（2 KB，0.1 秒）。
+    ok: upload_file sends a folder
+bridge: call send_to_terminal {"host":"lab1","session":"lm_2","text":"echo typed-by-agent","wait_seconds":1.5}
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=23B err=0B timedOut=false 0.06s
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=393B err=0B timedOut=false 1.59s
+
+>>> send_to_terminal {"host": "lab1", "session": "lm_2", "text": "echo typed-by-agent", "wait_seconds": 1.5}
+已发送到 lab1 · tmux lm_2。窗格最后几行：
+────────
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+sjc22-bt152-4ecf62d3-dc6f-4347-b6b4-e93e260abb31-BA4ECC98D96A:~ runner$ echo typed-by-agent
+typed-by-agent
+sjc22-bt152-4ecf62d3-dc6f-4347-b6b4-e93e260abb31-BA4ECC98D96A:~ runner$ 
+    ok: send_to_terminal types into a pane and reads it back
+bridge: call read_terminal {"host":"lab1","lines":10,"session":"train"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=51B err=0B timedOut=false 0.08s
+
+>>> read_terminal {"host": "lab1", "session": "train", "lines": 10}
+lab1 · tmux train · 最近 10 行
+────────
+busy job
+    ok: read_terminal reads a session the user named themselves
+bridge: call send_to_terminal {"host":"lab1","session":"train","text":"rm -rf /tmp/whatever"}
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=26B err=0B timedOut=false 0.06s
+
+>>> send_to_terminal {"host": "lab1", "session": "train", "text": "rm -rf /tmp/whatever"}  [isError]
+没有发送：lab1 的 tmux train 前台正在运行 Python，不是 shell 提示符，输入会被 Python 当成它自己的输入。
+可以：用 session:"new" 开一个新窗格来跑；或设 interrupt:true 先 Ctrl-C 停掉它；或者确实要回答它的提问（y/n、pdb 等）时设 allow_busy:true。先用 read_terminal 看看它在干什么。
+    ok: send_to_terminal refuses to type into a busy program
+bridge: call send_to_terminal {"cwd":"~/exp","host":"lab1","session":"new","text":"echo from-new-pane; pwd","wait_seconds":2}
+bridge: exec /usr/bin/ssh lab1 sh -c 'T=$(command -v tmux 2>/dev/null)
+for c in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux "$HOME/.l
+bridge: done status=0 out=427B err=0B timedOut=false 2.52s
+
+>>> send_to_terminal {"host": "lab1", "session": "new", "cwd": "~/exp", "text": "echo from-new-pane; pwd", "wait_seconds": 2}
+已在 lab1 开了新窗格 tmux lm_3（LiteMux 开着的话会把它显示成一个标签页）。窗格最后几行：
+────────
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+sjc22-bt152-4ecf62d3-dc6f-4347-b6b4-e93e260abb31-BA4ECC98D96A:exp runner$ echo from-new-pane; pwd
+from-new-pane
+/Users/runner/exp
+sjc22-bt152-4ecf62d3-dc6f-4347-b6b4-e93e260abb31-BA4ECC98D96A:exp runner$ 
+    ok: send_to_terminal opens a fresh lm_ pane
+    ok: the new pane (lm_3) avoids lab1 slots open in LiteMux
+bridge: call read_terminal {"host":"no-such-host"}
+
+>>> read_terminal {"host": "no-such-host"}  [isError]
+没有叫「no-such-host」的主机。可用的主机：autodl-westb-38192、lab1、gpu-a100、jp-proxy、Local Mac。先调用 list_hosts 看看。
+    ok: unknown hosts get a helpful error
+    ok: read-only mode hides acting tools
+    ok: read-only mode hides edits and uploads, keeps downloads
+bridge: call run_command {"command":"touch ~/should-not-exist","host":"lab1"}
+
+>>> run_command {"host": "lab1", "command": "touch ~/should-not-exist"}  [isError]
+LiteMux 处于只读模式，不能执行命令。用户可以在 LiteMux 的「接入 Coding Agent」里改成「执行前确认」。
+    ok: read-only mode refuses commands
+    ok: …and nothing ran
+
+BRIDGE SMOKE PASSED
+bridge: call run_command {"command":"nvidia-smi --gpu-reset -i 0","cwd":"~/exp","host":"lab1"}
+bridge: confirmation shown: Codex 想在「lab1」上执行命令
+screenshot taken; pressing Escape
+{"id": 2, "jsonrpc": "2.0", "result": {"content": [{"text": "用户在 LiteMux 里拒绝了这次操作（执行命令）。请换个做法，或者先问问用户。", "type": "text"}], "isError": true}}
