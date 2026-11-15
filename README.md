@@ -93,6 +93,7 @@ ssh 窗格连接失败时，底部横幅会直接说明原因和下一步：
 - 主机密钥变了（实例重建、ngrok 端口被复用），可以一键忘掉旧密钥并重连；
 - 隧道程序（cloudflared、ngrok）找不到，或隧道另一头没有 sshd（Colab / Kaggle 运行时断开）。开着 ControlMaster 时 ssh 会把 ProxyCommand 的报错吞掉，LiteMux 会自己跑一次隧道，把真正的报错找出来；
 - 域名解析失败、拒绝连接、超时、认证失败。
+- 隧道程序往 SSH 数据里混了文字（比如 colab-cli 的更新提示），或者一直没接通（多半在等登录授权）。colab-cli 的更新检查可以在横幅上一键关掉。
 
 ![左：实例重建后主机密钥变了；右：Colab 的 cloudflared 隧道找不到程序](docs/screenshots/connection-diagnosis.png)
 
