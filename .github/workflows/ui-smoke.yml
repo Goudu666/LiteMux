@@ -452,6 +452,7 @@ jobs:
           screencapture -x shots/light-colab.png || true
           sleep 14
           screencapture -x shots/light-colab-2.png || true
+          echo "--- ssh / tunnel processes"; ps -axo pid,ppid,etime,command | grep -E '[s]sh |[s]sh: |[n]c localhost|[c]olab' || true
           kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-colab.log; exit 1)
           kill $(cat app.pid) 2>/dev/null || true
           sleep 2

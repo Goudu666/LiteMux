@@ -96,4 +96,15 @@ final class ProxyDiagnosisTests: XCTestCase {
         XCTAssertEqual(fresh?["enable_update_check"] as? Bool, false)
         XCTAssertThrowsError(try ColabCLISettings.disablingUpdateCheck(Data("not json".utf8)))
     }
+
+    func testBackgroundChannelsBehindProxyNeverBecomeMaster() {
+        let inv = SSHInvocation(home: "/Users/me")
+        let ep = SSHEndpoint(host: "colab-runtime", options: ["ProxyCommand=colab ssh-proxy %h"])
+        let probe = inv.probeShellArguments(endpoint: ep, usesAskpass: false, rideOnly: true)
+        XCTAssertTrue(probe.contains("ControlMaster=no"))
+        XCTAssertTrue(probe.contains("ControlPath=/Users/me/.ssh/lm/%C"))
+        XCTAssertFalse(probe.contains { $0.hasPrefix("ControlPersist") })
+        XCTAssertTrue(inv.sftpArguments(endpoint: ep, usesAskpass: false, rideOnly: true).contains("ControlMaster=no"))
+        XCTAssertTrue(inv.sftpArguments(endpoint: ep, usesAskpass: false).contains("ControlMaster=auto"))
+    }
 }

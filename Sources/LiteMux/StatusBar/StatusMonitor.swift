@@ -77,10 +77,12 @@ final class StatusMonitor {
             return
         }
         guard let endpoint = host.endpoint, let hub else { return }
-        let args = hub.invocation.probeShellArguments(endpoint: endpoint, usesAskpass: host.hasSavedPassword)
         let env = hub.environment(for: host)
         let hostID = host.id
         loop = Task { [weak self] in
+            let behindProxy = await hub.hasProxyCommand(host)
+            let args = hub.invocation.probeShellArguments(endpoint: endpoint, usesAskpass: host.hasSavedPassword,
+                                                          rideOnly: behindProxy)
             var failures = 0
             while !Task.isCancelled {
                 guard let self else { return }

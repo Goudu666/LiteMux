@@ -42,6 +42,13 @@ final class ConnectionHub {
         return target
     }
 
+    /// Whether the host connects through a ProxyCommand (cached `ssh -G`, resolved when unknown).
+    func hasProxyCommand(_ host: HostEntry) async -> Bool {
+        let cached = cachedProxyTarget(host)
+        if cached.known { return cached.target != nil }
+        return await resolveProxyTarget(host) != nil
+    }
+
     /// Where the terminal's ssh writes the tunnel program's stderr for this host.
     func proxyLogPath(_ host: HostEntry) -> String {
         let safe = host.id.map { $0.isLetter || $0.isNumber || $0 == "-" ? $0 : "_" }
@@ -61,10 +68,12 @@ final class ConnectionHub {
         remotes[host.id] = nil
         if let task = inFlight[host.id] { return try await task.value }
 
-        let args = invocation.sftpArguments(endpoint: endpoint, usesAskpass: host.hasSavedPassword)
-        let env = environment(for: host)
         let hostID = host.id
-        let task = Task<SFTPFileSystem, Error> {
+        let task = Task<SFTPFileSystem, Error> { [weak self] in
+            let behindProxy = await self?.hasProxyCommand(host) ?? false
+            let args = self?.invocation.sftpArguments(endpoint: endpoint, usesAskpass: host.hasSavedPassword,
+                                                      rideOnly: behindProxy) ?? []
+            let env = self?.environment(for: host) ?? [:]
             let client = SFTPClient(executable: SSHInvocation.sshPath, arguments: args, environment: env)
             try await client.start()
             return SFTPFileSystem(client: client)
