@@ -363,6 +363,105 @@ jobs:
             sleep 2
           done
 
+      # Ephemeral instances: Colab behind cloudflared whose program is missing, and an
+      # instance recreated on the same address (its host key changed). The app has to
+      # say why, and "forget the old key" has to get the pane connected.
+      - name: Launch and capture (light, connection diagnosis)
+        run: |
+          for s in ~/.ssh/lm/*; do [ -S "$s" ] && ssh -o ControlPath="$s" -O exit lab1 2>/dev/null || true; done
+          command -v cloudflared && echo "note: cloudflared exists on this runner" || true
+          ssh-keygen -R 127.0.0.1 >/dev/null 2>&1 || true
+          ssh-keygen -q -t ed25519 -N "" -f /tmp/old_instance_key
+          echo "127.0.0.1 $(cut -d' ' -f1,2 /tmp/old_instance_key.pub)" >> ~/.ssh/known_hosts
+          cp ~/.config/litemux/state.json ~/.config/litemux/state.json.bak
+          python3 - <<'EOF'
+          import json, os, uuid
+          u = lambda: str(uuid.uuid4()).upper()
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p))
+          rebuilt, colab = u(), u()
+          s["bookmarks"] = [
+            {"id": rebuilt, "name": "autodl-重建后", "endpoint": {"host": "127.0.0.1", "user": os.environ["USER"],
+             "identityFile": "~/.ssh/id_ed25519", "options": []}, "hasSavedPassword": False, "createdAt": "2026-11-14T00:00:00Z"},
+            {"id": colab, "name": "colab", "endpoint": {"host": "lm-demo.trycloudflare.com", "user": "root",
+             "options": ["ProxyCommand=cloudflared access ssh --hostname %h"]}, "hasSavedPassword": False, "createdAt": "2026-11-14T00:00:00Z"},
+          ] + s.get("bookmarks", [])
+          leaf = lambda host: {"leaf": {"_0": {"id": u(), "hostID": host, "slot": 7}}}
+          tree = {"split": {"id": u(), "axis": "horizontal", "ratio": 0.5,
+                            "first": leaf("bookmark:" + rebuilt), "second": leaf("bookmark:" + colab)}}
+          s["tabs"] = [{"id": u(), "kind": {"terminal": {"_0": tree}}}]
+          s["selectedTabIndex"] = 0
+          s["appearance"] = "light"; s["colorTheme"] = "paper"; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          LITEMUX_SMOKE_DIAGNOSE=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-diagnose.log 2>&1 &
+          echo $! > app.pid
+          sleep 10
+          screencapture -x shots/light-diagnose.png || true
+          sleep 13
+          screencapture -x shots/light-diagnose-2.png || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-diagnose.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+          mv ~/.config/litemux/state.json.bak ~/.config/litemux/state.json
+          grep "smoke: " shots/app-diagnose.log || true
+          echo "--- known_hosts now has for 127.0.0.1:"; ssh-keygen -F 127.0.0.1 | tail -1 | cut -c1-80
+          grep -q "smoke: diagnosis hostKeyChanged 127.0.0.1" shots/app-diagnose.log || (echo "DIAGNOSE: host key change not recognised"; exit 1)
+          if command -v cloudflared >/dev/null; then echo "note: runner has cloudflared, skipping the missing-program check"; else
+            grep -q "smoke: diagnosis proxyMissing (refined)" shots/app-diagnose.log || (echo "DIAGNOSE: hidden ProxyCommand failure not found"; exit 1)
+          fi
+          grep -q "after fix autodl-重建后 phase=running" shots/app-diagnose.log && echo "HOST KEY FIX OK" || (echo "DIAGNOSE: pane did not reconnect after forgetting the key"; exit 1)
+
+      # colab-cli as ProxyCommand: its update notice goes to stdout, one line before sshd's
+      # banner (harmless) and one after it (inside the SSH stream). The app must name it,
+      # offer the fix, and connect once enable_update_check is false.
+      - name: Launch and capture (light, colab-cli tunnel)
+        run: |
+          for s in ~/.ssh/lm/*; do [ -S "$s" ] && ssh -o ControlPath="$s" -O exit lab1 2>/dev/null || true; done
+          rm -f ~/.config/colab-cli/settings.json
+          mkdir -p ~/.local/bin
+          cat > ~/.local/bin/colab <<'EOF'
+          #!/bin/bash
+          # A stand-in for colab-cli's ssh proxy: tunnels to the local sshd.
+          if ! grep -qs '"enable_update_check" *: *false' ~/.config/colab-cli/settings.json; then
+            echo "[colab] Run 'colab update' to update."
+            ( sleep 0.4; echo '[colab] To silence this check, set "enable_update_check": false in ~/.config/colab-cli/settings.json' ) &
+          fi
+          exec /usr/bin/nc localhost 22
+          EOF
+          chmod +x ~/.local/bin/colab
+          cp ~/.config/litemux/state.json ~/.config/litemux/state.json.bak
+          python3 - <<'EOF'
+          import json, os, uuid
+          u = lambda: str(uuid.uuid4()).upper()
+          p = os.path.expanduser("~/.config/litemux/state.json")
+          s = json.load(open(p))
+          bid = u()
+          s["bookmarks"] = [{"id": bid, "name": "colab-cli", "endpoint": {"host": "colab-runtime", "user": os.environ["USER"],
+            "identityFile": "~/.ssh/id_ed25519",
+            "options": ["ProxyCommand=sh -c 'colab ssh-proxy --runtime %h'", "HostKeyAlias=localhost"]},
+            "hasSavedPassword": False, "createdAt": "2026-11-15T00:00:00Z"}] + s.get("bookmarks", [])
+          s["tabs"] = [{"id": u(), "kind": {"terminal": {"_0": {"leaf": {"_0": {"id": u(), "hostID": "bookmark:" + bid, "slot": 8}}}}}}]
+          s["selectedTabIndex"] = 0
+          s["appearance"] = "light"; s["colorTheme"] = "paper"; s["sidebarMode"] = "hosts"
+          json.dump(s, open(p, "w"))
+          EOF
+          LITEMUX_SMOKE_DIAGNOSE=1 ./build/LiteMux.app/Contents/MacOS/LiteMux > shots/app-colab.log 2>&1 &
+          echo $! > app.pid
+          sleep 9
+          screencapture -x shots/light-colab.png || true
+          sleep 14
+          screencapture -x shots/light-colab-2.png || true
+          echo "--- ssh / tunnel processes"; ps -axo pid,ppid,etime,command | grep -E '[s]sh |[s]sh: |[n]c localhost|[c]olab' || true
+          kill -0 $(cat app.pid) && echo "app alive" || (echo "APP EXITED"; cat shots/app-colab.log; exit 1)
+          kill $(cat app.pid) 2>/dev/null || true
+          sleep 2
+          mv ~/.config/litemux/state.json.bak ~/.config/litemux/state.json
+          grep "smoke: " shots/app-colab.log || true
+          echo "--- settings.json"; cat ~/.config/colab-cli/settings.json || true
+          grep -q "smoke: diagnosis proxyNoise (refined) colab-cli 的更新提示混进了 SSH 数据" shots/app-colab.log || (echo "COLAB: noise not recognised"; exit 1)
+          grep -q "after fix colab-cli phase=running" shots/app-colab.log && echo "COLAB FIX OK" || (echo "COLAB: did not connect after the fix"; exit 1)
+
       # Screenshots go to a hidden ref (not a branch) so reviewers can fetch
       # them with git: `git fetch origin refs/ci/shots/<branch>`.
       - name: Publish screenshots to refs/ci/shots/<branch>

@@ -87,6 +87,16 @@ Antigravity 在 MCP Servers → Manage → View raw config 里加入同样的 `c
 
 反过来，LiteMux 把你正在看的东西写在 `~/.config/litemux/focus.json`：接入 Bridge 的 Agent 调用 `get_user_focus`，就知道你说的「这个文件」「选中的这段」是哪里。编辑器右上角的引用按钮会复制 `主机:路径:行号` 加选中的代码，也可以直接粘贴给 Agent。
 
+## 连不上时
+
+ssh 窗格连接失败时，底部横幅会直接说明原因和下一步：
+- 主机密钥变了（实例重建、ngrok 端口被复用），可以一键忘掉旧密钥并重连；
+- 隧道程序（cloudflared、ngrok）找不到，或隧道另一头没有 sshd（Colab / Kaggle 运行时断开）。开着 ControlMaster 时 ssh 会把 ProxyCommand 的报错吞掉，LiteMux 会自己跑一次隧道，把真正的报错找出来；
+- 域名解析失败、拒绝连接、超时、认证失败。
+- 隧道程序往 SSH 数据里混了文字（比如 colab-cli 的更新提示），或者一直没接通（多半在等登录授权）。colab-cli 的更新检查可以在横幅上一键关掉。
+
+![左：实例重建后主机密钥变了；右：Colab 的 cloudflared 隧道找不到程序](docs/screenshots/connection-diagnosis.png)
+
 ## 端口转发与 tmux 会话
 
 点状态栏左下角的主机名，弹出这台机器的端口和 tmux 会话：TensorBoard、Jupyter、Gradio 这类正在监听的端口一键「转发并打开」（`ssh -O forward` 复用现有隧道，不用重新登录），也能手填端口；你自己起的 `train`、`bot` 之类 tmux 会话可以直接「接管」到一个标签页，不会套进 `lm_` 会话里。

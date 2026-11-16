@@ -60,8 +60,17 @@ public struct SSHInvocation: Sendable {
     ]
 
     /// Non-interactive options for SFTP and probes. They never block on a prompt.
-    public func backgroundOptions(usesAskpass: Bool, endpoint: SSHEndpoint? = nil) -> [String] {
-        var opts = multiplexOptions(for: endpoint) + ["-o", "ConnectTimeout=6"]
+    ///
+    /// `rideOnly` (hosts behind a ProxyCommand): use an existing master but never become one.
+    /// A master started by a background channel keeps the tunnel program as a child of that
+    /// channel's ssh, so when LiteMux restarts the channel the tunnel goes down and every pane
+    /// sharing it sees "Shared connection … closed".
+    public func backgroundOptions(usesAskpass: Bool, endpoint: SSHEndpoint? = nil, rideOnly: Bool = false) -> [String] {
+        var opts = rideOnly
+            ? ["-o", "ControlMaster=no", "-o", "ControlPath=\(controlPath(for: endpoint))",
+               "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"]
+            : multiplexOptions(for: endpoint)
+        opts += ["-o", "ConnectTimeout=6"]
         if usesAskpass {
             opts += Self.askpassOptions
         } else {
@@ -117,13 +126,15 @@ public struct SSHInvocation: Sendable {
     // MARK: - Background channels
 
     /// `ssh … -s dest sftp` — the binary SFTP subsystem over stdin/stdout.
-    public func sftpArguments(endpoint: SSHEndpoint, usesAskpass: Bool) -> [String] {
-        ["-T"] + backgroundOptions(usesAskpass: usesAskpass, endpoint: endpoint) + ["-s"] + endpoint.arguments(home: home) + ["sftp"]
+    public func sftpArguments(endpoint: SSHEndpoint, usesAskpass: Bool, rideOnly: Bool = false) -> [String] {
+        ["-T"] + backgroundOptions(usesAskpass: usesAskpass, endpoint: endpoint, rideOnly: rideOnly)
+            + ["-s"] + endpoint.arguments(home: home) + ["sftp"]
     }
 
     /// A long-lived `sh` on the remote side that the status bar writes probe scripts to.
-    public func probeShellArguments(endpoint: SSHEndpoint, usesAskpass: Bool) -> [String] {
-        ["-T"] + backgroundOptions(usesAskpass: usesAskpass, endpoint: endpoint) + endpoint.arguments(home: home) + ["exec sh"]
+    public func probeShellArguments(endpoint: SSHEndpoint, usesAskpass: Bool, rideOnly: Bool = false) -> [String] {
+        ["-T"] + backgroundOptions(usesAskpass: usesAskpass, endpoint: endpoint, rideOnly: rideOnly)
+            + endpoint.arguments(home: home) + ["exec sh"]
     }
 
     /// `ssh -O check` / `-O exit` against the shared master.

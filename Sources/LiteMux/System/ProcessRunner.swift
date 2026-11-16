@@ -52,13 +52,39 @@ enum ProcessRunner {
         env["TERM_PROGRAM"] = "LiteMux"
         if env["LANG"] == nil || env["LANG"]?.isEmpty == true { env["LANG"] = "en_US.UTF-8" }
         if env["LC_CTYPE"] == nil { env["LC_CTYPE"] = "UTF-8" }
-        let path = env["PATH"] ?? ""
-        if !path.contains("/opt/homebrew/bin") {
-            env["PATH"] = ([path, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
-                .filter { !$0.isEmpty }.joined(separator: ":")
-        }
+        env["PATH"] = searchPath(inherited: env["PATH"] ?? "")
         for (k, v) in extra { env[k] = v }
         return env
+    }
+
+    /// A GUI app inherits only `/usr/bin:/bin:/usr/sbin:/sbin`, so a `ProxyCommand` such as
+    /// `cloudflared access ssh …` would not be found. Merge the login shell's PATH (read once
+    /// at launch, see `loadLoginShellPath`) and the usual install places.
+    static func searchPath(inherited: String) -> String {
+        let home = NSHomeDirectory()
+        let login: String = LoginShellPath.value ?? ""
+        var candidates: [String] = inherited.components(separatedBy: ":")
+        candidates.append(contentsOf: login.components(separatedBy: ":"))
+        let usual: [String] = ["/opt/homebrew/bin", "/usr/local/bin", home + "/.local/bin", home + "/bin",
+                               "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        candidates.append(contentsOf: usual)
+        var dirs: [String] = []
+        for d in candidates where !d.isEmpty && !dirs.contains(d) {
+            dirs.append(d)
+        }
+        return dirs.joined(separator: ":")
+    }
+
+    /// Reads `$PATH` from the user's login shell once, in the background (3 s at most).
+    static func loadLoginShellPath() {
+        guard LoginShellPath.value == nil else { return }
+        let shell = loginShell
+        Task.detached(priority: .utility) {
+            let marker = "__LITEMUX_PATH__"
+            let r = await ProcessRunner.run(shell, ["-l", "-c", "printf '\(marker)%s\(marker)' \"$PATH\""], timeout: 3)
+            let parts = r.stdout.components(separatedBy: marker)
+            if parts.count >= 3, !parts[1].isEmpty { LoginShellPath.value = parts[1] }
+        }
     }
 
     static func environmentArray(_ env: [String: String]) -> [String] {
@@ -72,5 +98,15 @@ enum ProcessRunner {
             if !s.isEmpty { return s }
         }
         return ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    }
+}
+
+/// The login shell's PATH, once known.
+enum LoginShellPath {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var stored: String?
+    static var value: String? {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); stored = newValue; lock.unlock() }
     }
 }

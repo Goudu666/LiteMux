@@ -130,7 +130,10 @@ struct PaneView: View {
                     .background(Theme.canvasColor, ignoresSafeAreaEdges: [])
                 if case .ended(let code) = session.phase {
                     ReconnectBanner(remote: session.host.endpoint != nil, code: code,
+                                    diagnosis: session.diagnosis,
                                     reconnect: { session.restart(); model.focusSoon(pane.id) },
+                                    forgetKey: { session.forgetHostKeyAndReconnect(); model.focusSoon(pane.id) },
+                                    fixColab: { session.disableColabUpdateCheckAndReconnect(); model.focusSoon(pane.id) },
                                     close: { model.closePane(pane.id, in: tab) })
                         .padding(10)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -158,30 +161,93 @@ struct PaneView: View {
 struct ReconnectBanner: View {
     let remote: Bool
     let code: Int32?
+    var diagnosis: SSHDiagnosis? = nil
     let reconnect: () -> Void
+    var forgetKey: () -> Void = {}
+    var fixColab: () -> Void = {}
     let close: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: remote ? "bolt.horizontal.circle" : "checkmark.circle")
-                .foregroundStyle(.secondary)
-            Text(remote && code == 255 ? "连接已断开" : "会话已结束")
-                .font(.system(size: 12, weight: .medium))
-            Spacer(minLength: 12)
-            Button("关闭窗格", action: close)
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .font(.system(size: 12))
-            Button(action: reconnect) {
-                Text(remote ? "重新连接 ⏎" : "重新打开 ⏎").font(.system(size: 12, weight: .semibold))
+        Group {
+            if let diagnosis {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: icon).foregroundStyle(Color(nsColor: Theme.warning))
+                        Text(diagnosis.title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        closeButton
+                    }
+                    Text(diagnosis.detail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .padding(.leading, 26)
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        if let args = diagnosis.forgetHostKeyArguments {
+                            Button(action: forgetKey) {
+                                Text("忘掉旧密钥并重连").font(.system(size: 12, weight: .medium))
+                            }
+                            .controlSize(.small)
+                            .fixedSize()
+                            .help("ssh-keygen " + args.joined(separator: " "))
+                        }
+                        if diagnosis.offersColabUpdateFix {
+                            Button(action: fixColab) {
+                                Text("关掉 colab-cli 更新检查并重连").font(.system(size: 12, weight: .medium))
+                            }
+                            .controlSize(.small)
+                            .fixedSize()
+                            .help("在 ~/.config/colab-cli/settings.json 里写入 \"enable_update_check\": false")
+                        }
+                        reconnectButton
+                    }
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: icon).foregroundStyle(.secondary)
+                    Text(remote && code == 255 ? "连接已断开" : "会话已结束")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer(minLength: 12)
+                    closeButton
+                    reconnectButton
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairlineColor))
-        .frame(maxWidth: 440)
+        .frame(maxWidth: diagnosis == nil ? 440 : 520)
+    }
+
+    private var closeButton: some View {
+        Button("关闭窗格", action: close)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .fixedSize()
+    }
+
+    private var reconnectButton: some View {
+        Button(action: reconnect) {
+            Text(remote ? "重新连接 ⏎" : "重新打开 ⏎").font(.system(size: 12, weight: .semibold))
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .fixedSize()
+    }
+
+    private var icon: String {
+        switch diagnosis?.kind {
+        case .hostKeyChanged?: return "key.horizontal"
+        case .proxyMissing?, .tunnelGone?, .tunnelWaiting?, .proxyNoise?: return "point.3.connected.trianglepath.dotted"
+        case .authFailed?, .tooManyKeys?: return "lock"
+        case .some: return "exclamationmark.triangle"
+        case nil: return remote ? "bolt.horizontal.circle" : "checkmark.circle"
+        }
     }
 }
